@@ -61,62 +61,6 @@ export class TypeSpeller {
       case "primitive": {
         switch (type.primitive) {
           case "bool":
-            return "build.skir.Serializers.bool";
-          case "int32":
-            return "build.skir.Serializers.int32";
-          case "int64":
-            return "build.skir.Serializers.int64";
-          case "hash64":
-            return "build.skir.Serializers.hash64";
-          case "float32":
-            return "build.skir.Serializers.float32";
-          case "float64":
-            return "build.skir.Serializers.float64";
-          case "timestamp":
-            return "build.skir.Serializers.timestamp";
-          case "string":
-            return "build.skir.Serializers.string";
-          case "bytes":
-            return "build.skir.Serializers.bytes";
-        }
-        const _: never = type.primitive;
-        throw TypeError();
-      }
-      case "array": {
-        if (type.key) {
-          const keyChain = type.key.path.map((f) => f.name.text).join(".");
-          const path = type.key.path.map((f) => "TODO").join(".");
-          return (
-            "build.skir.internal.keyedListSerializer(\n" +
-            this.getSerializerExpression(type.item) +
-            `,\n"${keyChain}",\n{ it.${path} },\n)`
-          );
-        } else {
-          return (
-            "build.skir.Serializers.list(\n" +
-            this.getSerializerExpression(type.item) +
-            ",\n)"
-          );
-        }
-      }
-      case "optional": {
-        return (
-          `build.skir.Serializers.optional(\n` +
-          this.getSerializerExpression(type.other) +
-          `,\n)`
-        );
-      }
-      case "record": {
-        return this.getClassName(type.key) + ".serializer";
-      }
-    }
-  }
-
-  getGoSerializerExpression(type: ResolvedType): string {
-    switch (type.kind) {
-      case "primitive": {
-        switch (type.primitive) {
-          case "bool":
             return "skir_client.BoolSerializer()";
           case "int32":
             return "skir_client.Int32Serializer()";
@@ -141,14 +85,14 @@ export class TypeSpeller {
       case "array": {
         return (
           "skir_client.ArraySerializer(\n" +
-          this.getGoSerializerExpression(type.item) +
+          this.getSerializerExpression(type.item) +
           ",\n)"
         );
       }
       case "optional": {
         return (
           "skir_client.OptionalSerializer(\n" +
-          this.getGoSerializerExpression(type.other) +
+          this.getSerializerExpression(type.other) +
           ",\n)"
         );
       }

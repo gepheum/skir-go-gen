@@ -3,6 +3,8 @@
 // ToString()
 // Methods
 // Constants
+// RPC code
+// Reflection
 // set up CI
 
 import {
@@ -416,8 +418,8 @@ class GoSourceFileGenerator {
       const isHardRecursive = field.isRecursive === "hard";
       // For hard-recursive fields the struct stores a pointer; wrap with Optional.
       const serializerExpr = isHardRecursive
-        ? `skir_client.OptionalSerializer(\n${typeSpeller.getGoSerializerExpression(field.type!)},\n)`
-        : typeSpeller.getGoSerializerExpression(field.type!);
+        ? `skir_client.OptionalSerializer(\n${typeSpeller.getSerializerExpression(field.type!)},\n)`
+        : typeSpeller.getSerializerExpression(field.type!);
       const storedGoType = isHardRecursive ? `*${goType}` : goType;
       this.push(
         `skir_client.AddField(\n` +
@@ -580,17 +582,102 @@ class GoSourceFileGenerator {
     this.push("}\n");
     this.push("}\n\n");
 
-    // Stub serializer – will be replaced when enum adapters are implemented.
+    // Adapter.
+    const qualifiedRecordName = record.recordAncestors
+      .map((r) => r.name.text)
+      .join(".");
+    const kindCount = 1 + constantVariants.length + wrapperVariants.length;
+    this.push(`var _${className}_adapter = skir_client.NewEnumAdapter(\n`);
+    this.push(`${toGoStringLiteral(record.modulePath)},\n`);
+    this.push(`${toGoStringLiteral(qualifiedRecordName)},\n`);
+    this.push(`${toGoStringLiteral(record.record.doc.text)},\n`);
+    this.push(`func(e ${className}) int { return int(e.kind) },\n`);
+    this.push(`${kindCount},\n`);
+    this.push(`${className}{},\n`);
+    this.push(
+      `func(u *skir_client.Internal__UnrecognizedVariant) ${className} ` +
+        `{ return ${className}{value: u} },\n`,
+    );
+    this.push(
+      `func(e ${className}) *skir_client.Internal__UnrecognizedVariant {\n` +
+        `if e.kind != ${kindType}_Unknown {\n` +
+        `return nil\n` +
+        `}\n` +
+        `u, _ := e.value.(*skir_client.Internal__UnrecognizedVariant)\n` +
+        `return u\n` +
+        `},\n`,
+    );
+    this.push(")\n\n");
+
+    // Serializer function.
     this.push(
       `func ${className}_serializer() skir_client.Serializer[${className}] {\n`,
     );
-    this.push(`panic("TODO: ${className}_serializer not yet implemented")\n`);
+    this.push(`return _${className}_adapter.Serializer()\n`);
+    this.push("}\n\n");
+
+    // init() – register variants and finalize.
+    this.push("func init() {\n");
+    for (const variant of constantVariants) {
+      const name = convertCase(variant.name.text, "UpperCamel");
+      this.push(
+        `_${className}_adapter.AddConstantVariant(\n` +
+          `${variant.number},\n` +
+          `${toGoStringLiteral(variant.name.text)},\n` +
+          `int(${kindType}_${name}Const),\n` +
+          `${className}_${name}Const(),\n` +
+          ")\n",
+      );
+    }
+    for (const variant of wrapperVariants) {
+      const name = convertCase(variant.name.text, "UpperCamel");
+      const goType = typeSpeller.getGoType(variant.type!);
+      const isStructType = this.isStructType(variant.type!);
+      const serializerExpr = typeSpeller.getSerializerExpression(variant.type!);
+      const getValueExpr = isStructType
+        ? `func(e ${className}) ${goType} { return *e.Unwrap${name}() }`
+        : `func(e ${className}) ${goType} { return e.Unwrap${name}() }`;
+      this.push(
+        `skir_client.AddWrapperVariant(\n` +
+          `_${className}_adapter,\n` +
+          `${variant.number},\n` +
+          `${toGoStringLiteral(variant.name.text)},\n` +
+          `int(${kindType}_${name}Wrapper),\n` +
+          `${serializerExpr},\n` +
+          `func(v ${goType}) ${className} { return ${className}_${name}Wrapper(v) },\n` +
+          `${getValueExpr},\n` +
+          ")\n",
+      );
+    }
+    for (const removedNumber of record.record.removedNumbers) {
+      this.push(`_${className}_adapter.AddRemovedNumber(${removedNumber})\n`);
+    }
+    this.push(`_${className}_adapter.Finalize()\n`);
     this.push("}\n\n");
   }
 
   private writeMethod(method: Method): void {}
 
-  private writeConstant(constant: Constant): void {}
+  private writeConstant(constant: Constant): void {
+    const { typeSpeller } = this;
+    const goName = convertCase(constant.name.text, "UpperCamel").concat(
+      "_const",
+    );
+    const type = constant.type!;
+    const goType = typeSpeller.getGoType(type);
+    const serializerExpr = typeSpeller.getSerializerExpression(type);
+    const goStringLiteral = toGoStringLiteral(
+      JSON.stringify(constant.valueAsDenseJson),
+    );
+    this.push(`var _${goName} *${goType} = nil\n\n`);
+    this.push("func init() {\n");
+    this.push(`  v, _ := ${serializerExpr}.FromJsonCode(${goStringLiteral})\n`);
+    this.push(`  _${goName} = &v\n`);
+    this.push("}\n\n");
+    this.push(`func ${goName}() *${goType} {\n`);
+    this.push(`  return _${goName}\n`);
+    this.push("}\n\n");
+  }
 
   private getKeyedArrayHelper(type: ResolvedType): KeyedArrayHelper | null {
     if (type.kind !== "array") {

@@ -23,11 +23,11 @@ func newSerializer[T any](a typeAdapter[T]) Serializer[T] {
 	return Serializer[T]{adapter: a}
 }
 
-func (s *Serializer[T]) ToJson(v T, flavor ...Readable) fastjson.Value {
+func (s Serializer[T]) ToJson(v T, flavor ...Readable) fastjson.Value {
 	return s.adapter.toJson(&v, len(flavor) > 0)
 }
 
-func (s *Serializer[T]) ToJsonCode(v T, flavor ...Readable) string {
+func (s Serializer[T]) ToJsonCode(v T, flavor ...Readable) string {
 	fv := s.adapter.toJson(&v, len(flavor) > 0)
 	raw := fv.MarshalTo(nil)
 	if len(flavor) == 0 {
@@ -40,11 +40,11 @@ func (s *Serializer[T]) ToJsonCode(v T, flavor ...Readable) string {
 	return buf.String()
 }
 
-func (s *Serializer[T]) FromJson(j fastjson.Value, opts ...KeepUnrecognizedValues) (T, error) {
+func (s Serializer[T]) FromJson(j fastjson.Value, opts ...KeepUnrecognizedValues) (T, error) {
 	return s.adapter.fromJson(j, len(opts) > 0)
 }
 
-func (s *Serializer[T]) FromJsonCode(code string, opts ...KeepUnrecognizedValues) (T, error) {
+func (s Serializer[T]) FromJsonCode(code string, opts ...KeepUnrecognizedValues) (T, error) {
 	fv, err := fastjson.Parse(code)
 	if err != nil {
 		var zero T
@@ -53,14 +53,14 @@ func (s *Serializer[T]) FromJsonCode(code string, opts ...KeepUnrecognizedValues
 	return s.adapter.fromJson(*fv, len(opts) > 0)
 }
 
-func (s *Serializer[T]) ToBytes(v T) []byte {
+func (s Serializer[T]) ToBytes(v T) []byte {
 	out := binaryOutput{}
 	out.out.WriteString("skir")
 	s.adapter.encode(&v, &out)
 	return out.out.Bytes()
 }
 
-func (s *Serializer[T]) FromBytes(b []byte, opts ...KeepUnrecognizedValues) (T, error) {
+func (s Serializer[T]) FromBytes(b []byte, opts ...KeepUnrecognizedValues) (T, error) {
 	if len(b) >= 4 && string(b[:4]) == "skir" {
 		in := newBinaryInput(b[4:], len(opts) > 0)
 		return s.adapter.decode(&in, len(opts) > 0)
@@ -69,7 +69,7 @@ func (s *Serializer[T]) FromBytes(b []byte, opts ...KeepUnrecognizedValues) (T, 
 	return s.FromJsonCode(string(b), opts...)
 }
 
-func (s *Serializer[T]) TypeDescriptor() TypeDescriptor {
+func (s Serializer[T]) TypeDescriptor() TypeDescriptor {
 	return s.adapter.typeDescriptor()
 }
 
