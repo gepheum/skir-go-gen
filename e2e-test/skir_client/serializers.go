@@ -1,0 +1,952 @@
+package skir_client
+
+import (
+	"encoding/base64"
+	"math"
+	"strconv"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"github.com/valyala/fastjson"
+)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Public serializer constructors
+// ─────────────────────────────────────────────────────────────────────────────
+
+func BoolSerializer() Serializer[bool]       { return newSerializer(&boolAdapter{}) }
+func Int32Serializer() Serializer[int32]     { return newSerializer(&int32Adapter{}) }
+func Int64Serializer() Serializer[int64]     { return newSerializer(&int64Adapter{}) }
+func Hash64Serializer() Serializer[uint64]   { return newSerializer(&hash64Adapter{}) }
+func Float32Serializer() Serializer[float32] { return newSerializer(&float32Adapter{}) }
+func Float64Serializer() Serializer[float64] { return newSerializer(&float64Adapter{}) }
+func TimestampSerializer() Serializer[time.Time] {
+	return newSerializer(&timestampAdapter{})
+}
+func StringSerializer() Serializer[string] { return newSerializer(&stringAdapter{}) }
+func BytesSerializer() Serializer[Bytes]   { return newSerializer(&bytesAdapter{}) }
+
+// ArraySerializer wraps an existing item Serializer to produce a
+// Serializer[Array[E]].
+func ArraySerializer[E any](item Serializer[E]) Serializer[Array[E]] {
+	return newSerializer(NewArrayAdapter(item.adapter))
+}
+
+// OptionalSerializer wraps an existing Serializer to produce a
+// Serializer[*E], where nil represents the absent value.
+func OptionalSerializer[E any](other Serializer[E]) Serializer[*E] {
+	return newSerializer(NewOptionalAdapter(other.adapter))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// boolAdapter
+// ─────────────────────────────────────────────────────────────────────────────
+
+type boolAdapter struct{}
+
+func (a *boolAdapter) isDefault(v *bool) bool { return !*v }
+
+func (a *boolAdapter) toJson(input *bool, _ bool) fastjson.Value {
+	var arena fastjson.Arena
+	if *input {
+		return *arena.NewNumberInt(1)
+	}
+	return *arena.NewNumberInt(0)
+}
+
+func (a *boolAdapter) fromJson(json fastjson.Value, _ bool) (bool, error) {
+	switch json.Type() {
+	case fastjson.TypeTrue:
+		return true, nil
+	case fastjson.TypeFalse:
+		return false, nil
+	default:
+		v, err := json.Int()
+		return v != 0, err
+	}
+}
+
+func (a *boolAdapter) encode(input *bool, out *binaryOutput) {
+	if *input {
+		out.writeUint8(1)
+	} else {
+		out.writeUint8(0)
+	}
+}
+
+func (a *boolAdapter) decode(in *binaryInput, _ bool) (bool, error) {
+	return in.readUint8() != 0, nil
+}
+
+func (a *boolAdapter) typeDescriptor() TypeDescriptor {
+	return BoolDescriptor
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// decodeNumber helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+// decodeNumberBody decodes a number given an already-consumed wire byte.
+// Wires 240 (float32) and 241 (float64) are truncated to int64; callers that
+// need the actual float value should handle those wires before calling this.
+func decodeNumberBody(wire uint8, in *binaryInput) int64 {
+	switch {
+	case wire < 232:
+		return int64(wire)
+	case wire == 232:
+		return int64(in.readUint16())
+	case wire == 233:
+		return int64(in.readUint32())
+	case wire == 234:
+		return int64(in.readHash64()) // reinterpret uint64 bits as int64
+	case wire == 235:
+		return int64(in.readUint8()) - 256
+	case wire == 236:
+		return int64(in.readUint16()) - 65536
+	case wire == 237:
+		return int64(in.readInt32())
+	case wire == 238:
+		return in.readInt64()
+	case wire == 239:
+		return in.readInt64() // timestamp
+	case wire == 240:
+		return int64(math.Trunc(float64(in.readFloat32())))
+	case wire == 241:
+		return int64(math.Trunc(in.readFloat64()))
+	default:
+		return 0
+	}
+}
+
+func decodeNumber(in *binaryInput) int64 {
+	return decodeNumberBody(in.readUint8(), in)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// int32Adapter – Internal_TypeAdapter[int32]
+// ─────────────────────────────────────────────────────────────────────────────
+
+type int32Adapter struct{}
+
+func (a *int32Adapter) isDefault(v *int32) bool { return *v == 0 }
+
+// toJson converts input to a JSON number. The readable flag is not used:
+// int32 has the same representation in both flavors.
+func (a *int32Adapter) toJson(input *int32, _ bool) fastjson.Value {
+	var arena fastjson.Arena
+	return *arena.NewNumberInt(int(*input))
+}
+
+// fromJson parses a JSON number or string as int32. Mirrors the TypeScript
+// expression  +(json as number | string) | 0
+func (a *int32Adapter) fromJson(json fastjson.Value, _ bool) (int32, error) {
+	switch json.Type() {
+	case fastjson.TypeNumber:
+		f, err := json.Float64()
+		if err != nil {
+			return 0, err
+		}
+		return int32(f), nil
+	case fastjson.TypeString:
+		sb, err := json.StringBytes()
+		if err != nil {
+			return 0, err
+		}
+		f, err := strconv.ParseFloat(string(sb), 64)
+		if err != nil {
+			// Matches TypeScript: NaN | 0 == 0
+			return 0, nil
+		}
+		return int32(f), nil
+	default:
+		return 0, nil
+	}
+}
+
+// encode writes the int32 to the binary stream using the skir wire format.
+// Mirrors TypeScript Int32Serializer.encode exactly.
+func (a *int32Adapter) encode(input *int32, out *binaryOutput) {
+	v := *input
+	switch {
+	case v < -65536:
+		out.writeUint8(237)
+		out.writeInt32(v) // v is int32, already in [-2147483648, -65537]
+	case v < -256:
+		out.writeUint8(236)
+		out.writeUint16(uint16(v + 65536))
+	case v < 0:
+		out.writeUint8(235)
+		out.writeUint8(uint8(v + 256))
+	case v < 232:
+		out.writeUint8(uint8(v))
+	case v < 65536:
+		out.writeUint8(232)
+		out.writeUint16(uint16(v))
+	default:
+		out.writeUint8(233)
+		out.writeUint32(uint32(v)) // v is int32, so always <= math.MaxInt32
+	}
+}
+
+// decode reads from the binary stream and returns the value as int32. Mirrors
+// TypeScript:  Number(decodeNumber(stream)) | 0
+func (a *int32Adapter) decode(in *binaryInput, _ bool) (int32, error) {
+	return int32(decodeNumber(in)), nil
+}
+
+func (a *int32Adapter) typeDescriptor() TypeDescriptor { return Int32Descriptor }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// int64Adapter – Internal_TypeAdapter[int64]
+// ─────────────────────────────────────────────────────────────────────────────
+
+// maxSafeInt64JSON is Number.MAX_SAFE_INTEGER = 2^53 - 1.
+const maxSafeInt64JSON = int64(9007199254740991)
+
+type int64Adapter struct{}
+
+func (a *int64Adapter) isDefault(v *int64) bool { return *v == 0 }
+
+// toJson returns a JSON number when the value fits in a JS safe integer, and
+// a JSON string otherwise. Mirrors TypeScript Int64Serializer.toJson.
+func (a *int64Adapter) toJson(input *int64, _ bool) fastjson.Value {
+	v := *input
+	var arena fastjson.Arena
+	if v >= -maxSafeInt64JSON && v <= maxSafeInt64JSON {
+		return *arena.NewNumberFloat64(float64(v))
+	}
+	return *arena.NewString(strconv.FormatInt(v, 10))
+}
+
+// fromJson parses a JSON number (rounds float64 → int64) or a JSON string.
+func (a *int64Adapter) fromJson(json fastjson.Value, _ bool) (int64, error) {
+	switch json.Type() {
+	case fastjson.TypeNumber:
+		f, err := json.Float64()
+		if err != nil {
+			return 0, err
+		}
+		return int64(math.Round(f)), nil
+	case fastjson.TypeString:
+		sb, err := json.StringBytes()
+		if err != nil {
+			return 0, err
+		}
+		n, err := strconv.ParseInt(string(sb), 10, 64)
+		if err != nil {
+			return 0, nil
+		}
+		return n, nil
+	default:
+		return 0, nil
+	}
+}
+
+// encode mirrors TypeScript Int64Serializer.encode:
+//
+//	0                       → writeUint8(0)
+//	fits int32 range        → reuse int32 encoding
+//	otherwise               → wire 238 + writeInt64
+func (a *int64Adapter) encode(input *int64, out *binaryOutput) {
+	v := *input
+	if v == 0 {
+		out.writeUint8(0)
+		return
+	}
+	if v >= -2147483648 && v <= 2147483647 {
+		i32 := int32(v)
+		int32AdapterSingleton.encode(&i32, out)
+		return
+	}
+	out.writeUint8(238)
+	out.writeInt64(v)
+}
+
+// decode reads the next encoded number and returns it as int64.
+func (a *int64Adapter) decode(in *binaryInput, _ bool) (int64, error) {
+	return decodeNumber(in), nil
+}
+
+func (a *int64Adapter) typeDescriptor() TypeDescriptor { return Int64Descriptor }
+
+// int32AdapterSingleton is used by int64Adapter.encode to reuse int32 encoding.
+var int32AdapterSingleton = &int32Adapter{}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// hash64Adapter – Internal_TypeAdapter[uint64]
+// ─────────────────────────────────────────────────────────────────────────────
+
+// maxSafeHash64JSON is Number.MAX_SAFE_INTEGER = 2^53 - 1, as uint64.
+const maxSafeHash64JSON = uint64(9007199254740991)
+
+type hash64Adapter struct{}
+
+func (a *hash64Adapter) isDefault(v *uint64) bool { return *v == 0 }
+
+// toJson returns a JSON number when the value fits in a JS safe integer, and
+// a JSON string otherwise. Mirrors TypeScript Hash64Serializer.toJson.
+func (a *hash64Adapter) toJson(input *uint64, _ bool) fastjson.Value {
+	v := *input
+	var arena fastjson.Arena
+	if v <= maxSafeHash64JSON {
+		return *arena.NewNumberFloat64(float64(v))
+	}
+	return *arena.NewString(strconv.FormatUint(v, 10))
+}
+
+// fromJson parses a JSON number or string as uint64.
+func (a *hash64Adapter) fromJson(json fastjson.Value, _ bool) (uint64, error) {
+	switch json.Type() {
+	case fastjson.TypeNumber:
+		f, err := json.Float64()
+		if err != nil {
+			return 0, err
+		}
+		if f < 0 {
+			return 0, nil
+		}
+		return uint64(math.Round(f)), nil
+	case fastjson.TypeString:
+		sb, err := json.StringBytes()
+		if err != nil {
+			return 0, err
+		}
+		n, err := strconv.ParseUint(string(sb), 10, 64)
+		if err != nil {
+			return 0, nil
+		}
+		return n, nil
+	default:
+		return 0, nil
+	}
+}
+
+// encode mirrors TypeScript Hash64Serializer.encode:
+//
+//	< 232          → single byte
+//	232..65535     → wire 232 + writeUint16
+//	65536..2^32-1  → wire 233 + writeUint32
+//	>= 2^32        → wire 234 + writeHash64
+func (a *hash64Adapter) encode(input *uint64, out *binaryOutput) {
+	v := *input
+	switch {
+	case v < 232:
+		out.writeUint8(uint8(v))
+	case v < 65536:
+		out.writeUint8(232)
+		out.writeUint16(uint16(v))
+	case v < 4294967296:
+		out.writeUint8(233)
+		out.writeUint32(uint32(v))
+	default:
+		out.writeUint8(234)
+		out.writeHash64(v)
+	}
+}
+
+// decode reads the next encoded number and reinterprets the int64 bits as
+// uint64, recovering the original unsigned value.
+func (a *hash64Adapter) decode(in *binaryInput, _ bool) (uint64, error) {
+	return uint64(decodeNumber(in)), nil
+}
+
+func (a *hash64Adapter) typeDescriptor() TypeDescriptor { return Hash64Descriptor }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// float helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+// floatSpecialString returns the TypeScript-compatible string representation
+// for NaN / ±Infinity, matching JS Number.toString() for those values.
+func floatSpecialString(f float64) string {
+	if math.IsNaN(f) {
+		return "NaN"
+	}
+	if math.IsInf(f, 1) {
+		return "Infinity"
+	}
+	return "-Infinity"
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// float32Adapter – Internal_TypeAdapter[float32]
+// ─────────────────────────────────────────────────────────────────────────────
+
+type float32Adapter struct{}
+
+func (a *float32Adapter) isDefault(v *float32) bool { return *v == 0 }
+
+// toJson returns a JSON number for finite values, or a JSON string ("NaN",
+// "Infinity", "-Infinity") for non-finite values. Mirrors TypeScript
+// FloatSerializer.toJson.
+func (a *float32Adapter) toJson(input *float32, _ bool) fastjson.Value {
+	f := float64(*input)
+	var arena fastjson.Arena
+	if math.IsInf(f, 0) || math.IsNaN(f) {
+		return *arena.NewString(floatSpecialString(f))
+	}
+	return *arena.NewNumberFloat64(f)
+}
+
+// fromJson converts a JSON number or string to float32. "+" prefix and the
+// special tokens "NaN", "Infinity", "-Infinity" are handled by
+// strconv.ParseFloat.
+func (a *float32Adapter) fromJson(json fastjson.Value, _ bool) (float32, error) {
+	switch json.Type() {
+	case fastjson.TypeNumber:
+		f, err := json.Float64()
+		if err != nil {
+			return 0, err
+		}
+		return float32(f), nil
+	case fastjson.TypeString:
+		sb, err := json.StringBytes()
+		if err != nil {
+			return 0, err
+		}
+		f, err := strconv.ParseFloat(string(sb), 32)
+		if err != nil {
+			return 0, nil
+		}
+		return float32(f), nil
+	default:
+		return 0, nil
+	}
+}
+
+// encode mirrors TypeScript Float32Serializer.encode:
+//
+//	0       → writeUint8(0)
+//	else    → wire 240 + writeFloat32
+func (a *float32Adapter) encode(input *float32, out *binaryOutput) {
+	if *input == 0 {
+		out.writeUint8(0)
+		return
+	}
+	out.writeUint8(240)
+	out.writeFloat32(*input)
+}
+
+// decode reads the wire byte and, if wire == 240, returns the exact float32.
+// For any integer wire the int64 body is converted to float32.
+func (a *float32Adapter) decode(in *binaryInput, _ bool) (float32, error) {
+	wire := in.readUint8()
+	if wire == 240 {
+		return in.readFloat32(), nil
+	}
+	return float32(decodeNumberBody(wire, in)), nil
+}
+
+func (a *float32Adapter) typeDescriptor() TypeDescriptor { return Float32Descriptor }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// float64Adapter – Internal_TypeAdapter[float64]
+// ─────────────────────────────────────────────────────────────────────────────
+
+type float64Adapter struct{}
+
+func (a *float64Adapter) isDefault(v *float64) bool { return *v == 0 }
+
+func (a *float64Adapter) toJson(input *float64, _ bool) fastjson.Value {
+	f := *input
+	var arena fastjson.Arena
+	if math.IsInf(f, 0) || math.IsNaN(f) {
+		return *arena.NewString(floatSpecialString(f))
+	}
+	return *arena.NewNumberFloat64(f)
+}
+
+func (a *float64Adapter) fromJson(json fastjson.Value, _ bool) (float64, error) {
+	switch json.Type() {
+	case fastjson.TypeNumber:
+		return json.Float64()
+	case fastjson.TypeString:
+		sb, err := json.StringBytes()
+		if err != nil {
+			return 0, err
+		}
+		f, err := strconv.ParseFloat(string(sb), 64)
+		if err != nil {
+			return 0, nil
+		}
+		return f, nil
+	default:
+		return 0, nil
+	}
+}
+
+// encode mirrors TypeScript Float64Serializer.encode:
+//
+//	0       → writeUint8(0)
+//	else    → wire 241 + writeFloat64
+func (a *float64Adapter) encode(input *float64, out *binaryOutput) {
+	if *input == 0 {
+		out.writeUint8(0)
+		return
+	}
+	out.writeUint8(241)
+	out.writeFloat64(*input)
+}
+
+func (a *float64Adapter) decode(in *binaryInput, _ bool) (float64, error) {
+	wire := in.readUint8()
+	if wire == 241 {
+		return in.readFloat64(), nil
+	}
+	return float64(decodeNumberBody(wire, in)), nil
+}
+
+func (a *float64Adapter) typeDescriptor() TypeDescriptor { return Float64Descriptor }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// timestampAdapter – Internal_TypeAdapter[time.Time]
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Valid unix-millisecond range, matching Timestamp.MIN / Timestamp.MAX in
+// TypeScript: April 20, 271821 BC – September 13, 275760 AD.
+const (
+	minTimestampMillis = int64(-8640000000000000)
+	maxTimestampMillis = int64(8640000000000000)
+)
+
+func clampTimestampMillis(ms int64) int64 {
+	if ms < minTimestampMillis {
+		return minTimestampMillis
+	}
+	if ms > maxTimestampMillis {
+		return maxTimestampMillis
+	}
+	return ms
+}
+
+func timeFromMillis(ms int64) time.Time {
+	return time.UnixMilli(clampTimestampMillis(ms)).UTC()
+}
+
+type timestampAdapter struct{}
+
+// isDefault returns true when the time corresponds to unix epoch (millis == 0),
+// matching the TypeScript default value Timestamp.UNIX_EPOCH.
+func (a *timestampAdapter) isDefault(v *time.Time) bool { return v.UnixMilli() == 0 }
+
+// toJson mirrors TypeScript TimestampSerializer.toJson:
+//
+//	dense:    unix millis as JSON number
+//	readable: {"unix_millis": N, "formatted": "<ISO-8601>"}
+func (a *timestampAdapter) toJson(input *time.Time, readableFlavor bool) fastjson.Value {
+	ms := input.UnixMilli()
+	var arena fastjson.Arena
+	if !readableFlavor {
+		// All valid timestamps fit within Number.MAX_SAFE_INTEGER so we can
+		// always use a JSON number here.
+		return *arena.NewNumberFloat64(float64(ms))
+	}
+	obj := arena.NewObject()
+	obj.Set("unix_millis", arena.NewNumberFloat64(float64(ms)))
+	// Format matches TypeScript Date.toISOString(): always UTC, always 3
+	// fractional-second digits.
+	obj.Set("formatted", arena.NewString(input.UTC().Format("2006-01-02T15:04:05.000Z")))
+	return *obj
+}
+
+// fromJson mirrors TypeScript TimestampSerializer.fromJson:
+//
+//	number  → unix millis directly
+//	string  → parse as number (unix millis)
+//	object  → extract "unix_millis" field and parse recursively
+func (a *timestampAdapter) fromJson(json fastjson.Value, _ bool) (time.Time, error) {
+	switch json.Type() {
+	case fastjson.TypeNumber:
+		f, err := json.Float64()
+		if err != nil {
+			return timeFromMillis(0), err
+		}
+		return timeFromMillis(int64(math.Round(f))), nil
+	case fastjson.TypeString:
+		sb, err := json.StringBytes()
+		if err != nil {
+			return timeFromMillis(0), err
+		}
+		f, err := strconv.ParseFloat(string(sb), 64)
+		if err != nil {
+			return timeFromMillis(0), nil
+		}
+		return timeFromMillis(int64(math.Round(f))), nil
+	case fastjson.TypeObject:
+		// Readable flavor: {"unix_millis": N, "formatted": "..."}
+		field := json.Get("unix_millis")
+		if field == nil {
+			return timeFromMillis(0), nil
+		}
+		return a.fromJson(*field, false)
+	default:
+		return timeFromMillis(0), nil
+	}
+}
+
+// encode mirrors TypeScript TimestampSerializer.encode:
+//
+//	unixMillis == 0 → writeUint8(0)
+//	else            → wire 239 + writeInt64(unix millis)
+func (a *timestampAdapter) encode(input *time.Time, out *binaryOutput) {
+	ms := input.UnixMilli()
+	if ms == 0 {
+		out.writeUint8(0)
+		return
+	}
+	out.writeUint8(239)
+	out.writeInt64(ms)
+}
+
+// decode reads the next encoded number as unix millis and returns a UTC time.Time.
+// Wire 239 is handled by decodeNumber as readInt64.
+func (a *timestampAdapter) decode(in *binaryInput, _ bool) (time.Time, error) {
+	return timeFromMillis(decodeNumber(in)), nil
+}
+
+func (a *timestampAdapter) typeDescriptor() TypeDescriptor { return TimestampDescriptor }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// encodeUint32 helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+// encodeUint32 encodes a length value using the skir variable-length uint32
+// scheme (mirrors TypeScript's encodeUint32). Used for string and bytes lengths.
+func encodeUint32(n uint32, out *binaryOutput) {
+	if n < 232 {
+		out.writeUint8(uint8(n))
+	} else if n < 65536 {
+		out.writeUint8(232)
+		out.writeUint16(uint16(n))
+	} else {
+		out.writeUint8(233)
+		out.writeUint32(n)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// stringAdapter – Internal_TypeAdapter[string]
+// ─────────────────────────────────────────────────────────────────────────────
+
+type stringAdapter struct{}
+
+func (a *stringAdapter) isDefault(v *string) bool { return *v == "" }
+
+// toJson returns the string as a JSON string. Same in both flavors.
+func (a *stringAdapter) toJson(input *string, _ bool) fastjson.Value {
+	var arena fastjson.Arena
+	return *arena.NewString(*input)
+}
+
+// fromJson accepts a JSON string (or number 0 as the empty string, mirroring
+// TypeScript's fallback for the dense default).
+func (a *stringAdapter) fromJson(json fastjson.Value, _ bool) (string, error) {
+	switch json.Type() {
+	case fastjson.TypeString:
+		sb, err := json.StringBytes()
+		if err != nil {
+			return "", err
+		}
+		return string(sb), nil
+	case fastjson.TypeNumber:
+		// TypeScript: if (json === 0) { return ""; }
+		return "", nil
+	default:
+		return "", nil
+	}
+}
+
+// encode mirrors TypeScript StringSerializer.encode:
+//
+//	empty  → wire 242
+//	else   → wire 243 + encodeUint32(utf8ByteLen) + utf8 bytes
+//
+// The string is pre-sanitized to valid UTF-8 (invalid bytes → U+FFFD) so that
+// len(safe) gives the exact byte count before writing the length header.
+func (a *stringAdapter) encode(input *string, out *binaryOutput) {
+	s := *input
+	if len(s) == 0 {
+		out.writeUint8(242)
+		return
+	}
+	out.writeUint8(243)
+	var safe string
+	if utf8.ValidString(s) {
+		safe = s
+	} else {
+		safe = strings.ToValidUTF8(s, string(utf8.RuneError))
+	}
+	encodeUint32(uint32(len(safe)), out)
+	out.putUtf8String(safe) // already valid UTF-8; fast-paths to WriteString
+}
+
+// decode mirrors TypeScript StringSerializer.decode:
+//
+//	wire 0 or 242 → empty string
+//	wire 243      → read encoded length, then that many UTF-8 bytes
+func (a *stringAdapter) decode(in *binaryInput, _ bool) (string, error) {
+	wire := in.readUint8()
+	if wire == 0 || wire == 242 {
+		return "", nil
+	}
+	n := decodeNumber(in)
+	return in.readString(int(n)), nil
+}
+
+func (a *stringAdapter) typeDescriptor() TypeDescriptor { return StringDescriptor }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// bytesAdapter – Internal_TypeAdapter[Bytes]
+// ─────────────────────────────────────────────────────────────────────────────
+
+type bytesAdapter struct{}
+
+func (a *bytesAdapter) isDefault(v *Bytes) bool { return v.IsEmpty() }
+
+// toJson mirrors TypeScript ByteStringSerializer.toJson:
+//
+//	dense:    standard base64 string (matching JS btoa / RFC 4648 with padding)
+//	readable: "hex:" + lowercase hex string
+func (a *bytesAdapter) toJson(input *Bytes, readableFlavor bool) fastjson.Value {
+	var arena fastjson.Arena
+	if readableFlavor {
+		return *arena.NewString("hex:" + input.Hex())
+	}
+	return *arena.NewString(base64.StdEncoding.EncodeToString([]byte(input.v)))
+}
+
+// fromJson mirrors TypeScript ByteStringSerializer.fromJson:
+//
+//	number 0      → empty Bytes (dense default)
+//	"hex:..."→ hex-decode the suffix
+//	other string  → base64-decode (standard with padding)
+func (a *bytesAdapter) fromJson(json fastjson.Value, _ bool) (Bytes, error) {
+	switch json.Type() {
+	case fastjson.TypeNumber:
+		return Bytes{}, nil
+	case fastjson.TypeString:
+		sb, err := json.StringBytes()
+		if err != nil {
+			return Bytes{}, err
+		}
+		s := string(sb)
+		if strings.HasPrefix(s, "hex:") {
+			return BytesFromHex(s[4:])
+		}
+		b, err := base64.StdEncoding.DecodeString(s)
+		if err != nil {
+			return Bytes{}, err
+		}
+		return BytesFromSlice(b), nil
+	default:
+		return Bytes{}, nil
+	}
+}
+
+// encode mirrors TypeScript ByteStringSerializer.encode:
+//
+//	empty → wire 244
+//	else  → wire 245 + encodeUint32(byteLen) + raw bytes
+func (a *bytesAdapter) encode(input *Bytes, out *binaryOutput) {
+	if input.IsEmpty() {
+		out.writeUint8(244)
+		return
+	}
+	out.writeUint8(245)
+	encodeUint32(uint32(input.Len()), out)
+	out.putBytes(*input)
+}
+
+// decode mirrors TypeScript ByteStringSerializer.decode:
+//
+//	wire 0 or 244 → empty Bytes
+//	wire 245      → read encoded length, then that many raw bytes
+func (a *bytesAdapter) decode(in *binaryInput, _ bool) (Bytes, error) {
+	wire := in.readUint8()
+	if wire == 0 || wire == 244 {
+		return Bytes{}, nil
+	}
+	n := decodeNumber(in)
+	return in.sliceBytes(int(n)), nil
+}
+
+func (a *bytesAdapter) typeDescriptor() TypeDescriptor { return BytesDescriptor }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// arrayAdapter – typeAdapter[Array[E]]
+// ─────────────────────────────────────────────────────────────────────────────
+
+type arrayAdapter[E any] struct {
+	item typeAdapter[E]
+	desc *ArrayDescriptor
+}
+
+// NewArrayAdapter returns a typeAdapter[Array[E]] that delegates
+// element serialization to item.
+func NewArrayAdapter[E any](item typeAdapter[E]) *arrayAdapter[E] {
+	return &arrayAdapter[E]{
+		item: item,
+		desc: &ArrayDescriptor{
+			ItemType: item.typeDescriptor(),
+		},
+	}
+}
+
+func (a *arrayAdapter[E]) isDefault(v *Array[E]) bool { return v.IsEmpty() }
+
+// toJson maps each element to JSON and returns a JSON array. Mirrors TypeScript
+// ArraySerializerImpl.toJson.
+func (a *arrayAdapter[E]) toJson(input *Array[E], readableFlavor bool) fastjson.Value {
+	var arena fastjson.Arena
+	arr := arena.NewArray()
+	for i, elemPtr := range input.All() {
+		v := a.item.toJson(elemPtr, readableFlavor)
+		arr.SetArrayItem(i, &v)
+	}
+	return *arr
+}
+
+// fromJson accepts a JSON array or the number 0 (dense default for empty).
+// Mirrors TypeScript ArraySerializerImpl.fromJson.
+func (a *arrayAdapter[E]) fromJson(json fastjson.Value, keepUnrecognizedValues bool) (Array[E], error) {
+	if json.Type() == fastjson.TypeNumber {
+		// Dense default: 0 → empty array.
+		return Array[E]{}, nil
+	}
+	items, err := json.Array()
+	if err != nil {
+		return Array[E]{}, err
+	}
+	s := make([]E, len(items))
+	for i, item := range items {
+		s[i], err = a.item.fromJson(*item, keepUnrecognizedValues)
+		if err != nil {
+			return Array[E]{}, err
+		}
+	}
+	return ArrayFromSlice(s), nil
+}
+
+// encode mirrors TypeScript ArraySerializerImpl.encode:
+//
+//	length 0..3 → single byte 246+length
+//	length > 3  → wire 250 + encodeUint32(length)
+//
+// followed by each element encoded by the item adapter.
+func (a *arrayAdapter[E]) encode(input *Array[E], out *binaryOutput) {
+	n := input.Len()
+	if n <= 3 {
+		out.writeUint8(uint8(246 + n))
+	} else {
+		out.writeUint8(250)
+		encodeUint32(uint32(n), out)
+	}
+	for _, elemPtr := range input.All() {
+		a.item.encode(elemPtr, out)
+	}
+}
+
+// decode mirrors TypeScript ArraySerializerImpl.decode:
+//
+//	wire 0 or 246 → empty array
+//	wire 247..249 → length = wire − 246
+//	wire 250      → length from decodeNumber
+func (a *arrayAdapter[E]) decode(in *binaryInput, keepUnrecognizedValues bool) (Array[E], error) {
+	wire := in.readUint8()
+	if wire == 0 || wire == 246 {
+		return Array[E]{}, nil
+	}
+	var n int
+	if wire == 250 {
+		n = int(decodeNumber(in))
+	} else {
+		n = int(wire) - 246
+	}
+	// Guard against corrupted length causing huge allocations.
+	if n < 0 || n > len(in.data) {
+		return Array[E]{}, nil
+	}
+	s := make([]E, n)
+	var err error
+	for i := range s {
+		s[i], err = a.item.decode(in, keepUnrecognizedValues)
+		if err != nil {
+			return Array[E]{}, err
+		}
+	}
+	return ArrayFromSlice(s), nil
+}
+
+func (a *arrayAdapter[E]) typeDescriptor() TypeDescriptor { return a.desc }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// optionalAdapter – typeAdapter[*E]
+// ─────────────────────────────────────────────────────────────────────────────
+
+type optionalAdapter[E any] struct {
+	other typeAdapter[E]
+	desc  *OptionalDescriptor
+}
+
+// NewOptionalAdapter wraps an inner adapter to produce an adapter for *E,
+// where nil represents the absent value.
+func NewOptionalAdapter[E any](other typeAdapter[E]) *optionalAdapter[E] {
+	return &optionalAdapter[E]{
+		other: other,
+		desc:  &OptionalDescriptor{OtherType: other.typeDescriptor()},
+	}
+}
+
+func (a *optionalAdapter[E]) isDefault(v **E) bool { return *v == nil }
+
+// toJson returns JSON null for nil; otherwise delegates to the inner adapter.
+func (a *optionalAdapter[E]) toJson(input **E, readableFlavor bool) fastjson.Value {
+	if *input == nil {
+		var arena fastjson.Arena
+		return *arena.NewNull()
+	}
+	return a.other.toJson(*input, readableFlavor)
+}
+
+// fromJson returns nil for JSON null; otherwise delegates to the inner adapter
+// and returns a pointer to the decoded value.
+func (a *optionalAdapter[E]) fromJson(json fastjson.Value, keepUnrecognizedValues bool) (*E, error) {
+	if json.Type() == fastjson.TypeNull {
+		return nil, nil
+	}
+	v, err := a.other.fromJson(json, keepUnrecognizedValues)
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+// encode mirrors TypeScript OptionalSerializerImpl.encode:
+//
+//	nil   → wire 255
+//	else  → delegate to inner adapter (which writes its own wire byte)
+func (a *optionalAdapter[E]) encode(input **E, out *binaryOutput) {
+	if *input == nil {
+		out.writeUint8(255)
+		return
+	}
+	a.other.encode(*input, out)
+}
+
+// decode mirrors TypeScript OptionalSerializerImpl.decode:
+// peek at the next wire byte; if 255, consume it and return nil;
+// otherwise let the inner adapter read the wire byte itself.
+func (a *optionalAdapter[E]) decode(in *binaryInput, keepUnrecognizedValues bool) (*E, error) {
+	if in.peekUint8() == 255 {
+		in.readUint8() // consume the 255
+		return nil, nil
+	}
+	v, err := a.other.decode(in, keepUnrecognizedValues)
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (a *optionalAdapter[E]) typeDescriptor() TypeDescriptor { return a.desc }

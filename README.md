@@ -1,0 +1,1 @@
+# skir-go-gen
