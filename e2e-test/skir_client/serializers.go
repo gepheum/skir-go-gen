@@ -11,6 +11,55 @@ import (
 	"github.com/valyala/fastjson"
 )
 
+// hexDigits is used for \uXXXX escaping in writeJsonEscapedString.
+const hexDigits = "0123456789abcdef"
+
+// writeJsonEscapedString writes s as a JSON string literal to out.
+// It escapes ", \, and control characters (0x00–0x1F, 0x7F), and replaces
+// invalid UTF-8 sequences with U+FFFD.
+func writeJsonEscapedString(s string, out *strings.Builder) {
+	out.WriteByte('"')
+	for i := 0; i < len(s); {
+		b := s[i]
+		if b < utf8.RuneSelf {
+			switch b {
+			case '"':
+				out.WriteString(`\"`)
+			case '\\':
+				out.WriteString(`\\`)
+			case '\n':
+				out.WriteString(`\n`)
+			case '\r':
+				out.WriteString(`\r`)
+			case '\t':
+				out.WriteString(`\t`)
+			case '\b':
+				out.WriteString(`\b`)
+			case '\f':
+				out.WriteString(`\f`)
+			default:
+				if b < 0x20 || b == 0x7F {
+					out.WriteString(`\u00`)
+					out.WriteByte(hexDigits[b>>4])
+					out.WriteByte(hexDigits[b&0xf])
+				} else {
+					out.WriteByte(b)
+				}
+			}
+			i++
+		} else {
+			r, size := utf8.DecodeRuneInString(s[i:])
+			if r == utf8.RuneError && size == 1 {
+				out.WriteString(`\ufffd`)
+			} else {
+				out.WriteString(s[i : i+size])
+			}
+			i += size
+		}
+	}
+	out.WriteByte('"')
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Public serializer constructors
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,12 +96,12 @@ type boolAdapter struct{}
 
 func (a *boolAdapter) isDefault(v *bool) bool { return !*v }
 
-func (a *boolAdapter) toJson(input *bool, _ bool) fastjson.Value {
-	var arena fastjson.Arena
+func (a *boolAdapter) toJson(input *bool, _ *string, out *strings.Builder) {
 	if *input {
-		return *arena.NewNumberInt(1)
+		out.WriteByte('1')
+	} else {
+		out.WriteByte('0')
 	}
-	return *arena.NewNumberInt(0)
 }
 
 func (a *boolAdapter) fromJson(json fastjson.Value, _ bool) (bool, error) {
@@ -131,11 +180,11 @@ type int32Adapter struct{}
 
 func (a *int32Adapter) isDefault(v *int32) bool { return *v == 0 }
 
-// toJson converts input to a JSON number. The readable flag is not used:
-// int32 has the same representation in both flavors.
-func (a *int32Adapter) toJson(input *int32, _ bool) fastjson.Value {
-	var arena fastjson.Arena
-	return *arena.NewNumberInt(int(*input))
+// toJson converts input to a JSON number. eolIndent is not used: int32 has
+// the same representation in both flavors, and always formats without
+// scientific notation.
+func (a *int32Adapter) toJson(input *int32, _ *string, out *strings.Builder) {
+	out.WriteString(strconv.FormatInt(int64(*input), 10))
 }
 
 // fromJson parses a JSON number or string as int32. Mirrors the TypeScript
@@ -208,15 +257,17 @@ type int64Adapter struct{}
 
 func (a *int64Adapter) isDefault(v *int64) bool { return *v == 0 }
 
-// toJson returns a JSON number when the value fits in a JS safe integer, and
-// a JSON string otherwise. Mirrors TypeScript Int64Serializer.toJson.
-func (a *int64Adapter) toJson(input *int64, _ bool) fastjson.Value {
+// toJson writes a JSON number when the value fits in a JS safe integer, and
+// a JSON string otherwise. Never uses scientific notation.
+func (a *int64Adapter) toJson(input *int64, _ *string, out *strings.Builder) {
 	v := *input
-	var arena fastjson.Arena
 	if v >= -maxSafeInt64JSON && v <= maxSafeInt64JSON {
-		return *arena.NewNumberFloat64(float64(v))
+		out.WriteString(strconv.FormatInt(v, 10))
+	} else {
+		out.WriteByte('"')
+		out.WriteString(strconv.FormatInt(v, 10))
+		out.WriteByte('"')
 	}
-	return *arena.NewString(strconv.FormatInt(v, 10))
 }
 
 // fromJson parses a JSON number (rounds float64 → int64) or a JSON string.
@@ -284,15 +335,17 @@ type hash64Adapter struct{}
 
 func (a *hash64Adapter) isDefault(v *uint64) bool { return *v == 0 }
 
-// toJson returns a JSON number when the value fits in a JS safe integer, and
-// a JSON string otherwise. Mirrors TypeScript Hash64Serializer.toJson.
-func (a *hash64Adapter) toJson(input *uint64, _ bool) fastjson.Value {
+// toJson writes a JSON number when the value fits in a JS safe integer, and
+// a JSON string otherwise. Never uses scientific notation.
+func (a *hash64Adapter) toJson(input *uint64, _ *string, out *strings.Builder) {
 	v := *input
-	var arena fastjson.Arena
 	if v <= maxSafeHash64JSON {
-		return *arena.NewNumberFloat64(float64(v))
+		out.WriteString(strconv.FormatUint(v, 10))
+	} else {
+		out.WriteByte('"')
+		out.WriteString(strconv.FormatUint(v, 10))
+		out.WriteByte('"')
 	}
-	return *arena.NewString(strconv.FormatUint(v, 10))
 }
 
 // fromJson parses a JSON number or string as uint64.
@@ -377,16 +430,17 @@ type float32Adapter struct{}
 
 func (a *float32Adapter) isDefault(v *float32) bool { return *v == 0 }
 
-// toJson returns a JSON number for finite values, or a JSON string ("NaN",
-// "Infinity", "-Infinity") for non-finite values. Mirrors TypeScript
-// FloatSerializer.toJson.
-func (a *float32Adapter) toJson(input *float32, _ bool) fastjson.Value {
+// toJson writes a JSON number for finite values, or a quoted string ("NaN",
+// "Infinity", "-Infinity") for non-finite values.
+func (a *float32Adapter) toJson(input *float32, _ *string, out *strings.Builder) {
 	f := float64(*input)
-	var arena fastjson.Arena
 	if math.IsInf(f, 0) || math.IsNaN(f) {
-		return *arena.NewString(floatSpecialString(f))
+		out.WriteByte('"')
+		out.WriteString(floatSpecialString(f))
+		out.WriteByte('"')
+		return
 	}
-	return *arena.NewNumberFloat64(f)
+	out.WriteString(strconv.FormatFloat(f, 'g', -1, 32))
 }
 
 // fromJson converts a JSON number or string to float32. "+" prefix and the
@@ -448,13 +502,15 @@ type float64Adapter struct{}
 
 func (a *float64Adapter) isDefault(v *float64) bool { return *v == 0 }
 
-func (a *float64Adapter) toJson(input *float64, _ bool) fastjson.Value {
+func (a *float64Adapter) toJson(input *float64, _ *string, out *strings.Builder) {
 	f := *input
-	var arena fastjson.Arena
 	if math.IsInf(f, 0) || math.IsNaN(f) {
-		return *arena.NewString(floatSpecialString(f))
+		out.WriteByte('"')
+		out.WriteString(floatSpecialString(f))
+		out.WriteByte('"')
+		return
 	}
-	return *arena.NewNumberFloat64(f)
+	out.WriteString(strconv.FormatFloat(f, 'g', -1, 64))
 }
 
 func (a *float64Adapter) fromJson(json fastjson.Value, _ bool) (float64, error) {
@@ -534,20 +590,29 @@ func (a *timestampAdapter) isDefault(v *time.Time) bool { return v.UnixMilli() =
 //
 //	dense:    unix millis as JSON number
 //	readable: {"unix_millis": N, "formatted": "<ISO-8601>"}
-func (a *timestampAdapter) toJson(input *time.Time, readableFlavor bool) fastjson.Value {
+func (a *timestampAdapter) toJson(input *time.Time, eolIndent *string, out *strings.Builder) {
 	ms := input.UnixMilli()
-	var arena fastjson.Arena
-	if !readableFlavor {
+	if eolIndent == nil {
 		// All valid timestamps fit within Number.MAX_SAFE_INTEGER so we can
 		// always use a JSON number here.
-		return *arena.NewNumberFloat64(float64(ms))
+		out.WriteString(strconv.FormatInt(ms, 10))
+		return
 	}
-	obj := arena.NewObject()
-	obj.Set("unix_millis", arena.NewNumberFloat64(float64(ms)))
+	// Readable: {"unix_millis": N, "formatted": "<ISO-8601>"}
+	childIndent := *eolIndent + "  "
+	out.WriteByte('{')
+	out.WriteString(childIndent)
+	out.WriteString(`"unix_millis": `)
+	out.WriteString(strconv.FormatInt(ms, 10))
+	out.WriteByte(',')
+	out.WriteString(childIndent)
 	// Format matches TypeScript Date.toISOString(): always UTC, always 3
 	// fractional-second digits.
-	obj.Set("formatted", arena.NewString(input.UTC().Format("2006-01-02T15:04:05.000Z")))
-	return *obj
+	out.WriteString(`"formatted": "`)
+	out.WriteString(input.UTC().Format("2006-01-02T15:04:05.000Z"))
+	out.WriteByte('"')
+	out.WriteString(*eolIndent)
+	out.WriteByte('}')
 }
 
 // fromJson mirrors TypeScript TimestampSerializer.fromJson:
@@ -633,10 +698,9 @@ type stringAdapter struct{}
 
 func (a *stringAdapter) isDefault(v *string) bool { return *v == "" }
 
-// toJson returns the string as a JSON string. Same in both flavors.
-func (a *stringAdapter) toJson(input *string, _ bool) fastjson.Value {
-	var arena fastjson.Arena
-	return *arena.NewString(*input)
+// toJson writes the string as a properly escaped JSON string. Same in both flavors.
+func (a *stringAdapter) toJson(input *string, _ *string, out *strings.Builder) {
+	writeJsonEscapedString(*input, out)
 }
 
 // fromJson accepts a JSON string (or number 0 as the empty string, mirroring
@@ -708,12 +772,15 @@ func (a *bytesAdapter) isDefault(v *Bytes) bool { return v.IsEmpty() }
 //
 //	dense:    standard base64 string (matching JS btoa / RFC 4648 with padding)
 //	readable: "hex:" + lowercase hex string
-func (a *bytesAdapter) toJson(input *Bytes, readableFlavor bool) fastjson.Value {
-	var arena fastjson.Arena
-	if readableFlavor {
-		return *arena.NewString("hex:" + input.Hex())
+func (a *bytesAdapter) toJson(input *Bytes, eolIndent *string, out *strings.Builder) {
+	out.WriteByte('"')
+	if eolIndent != nil {
+		out.WriteString("hex:")
+		out.WriteString(input.Hex())
+	} else {
+		out.WriteString(base64.StdEncoding.EncodeToString([]byte(input.v)))
 	}
-	return *arena.NewString(base64.StdEncoding.EncodeToString([]byte(input.v)))
+	out.WriteByte('"')
 }
 
 // fromJson mirrors TypeScript ByteStringSerializer.fromJson:
@@ -795,16 +862,35 @@ func NewArrayAdapter[E any](item typeAdapter[E]) *arrayAdapter[E] {
 
 func (a *arrayAdapter[E]) isDefault(v *Array[E]) bool { return v.IsEmpty() }
 
-// toJson maps each element to JSON and returns a JSON array. Mirrors TypeScript
-// ArraySerializerImpl.toJson.
-func (a *arrayAdapter[E]) toJson(input *Array[E], readableFlavor bool) fastjson.Value {
-	var arena fastjson.Arena
-	arr := arena.NewArray()
-	for i, elemPtr := range input.All() {
-		v := a.item.toJson(elemPtr, readableFlavor)
-		arr.SetArrayItem(i, &v)
+// toJson writes a JSON array. In readable mode each element is on its own
+// indented line; in dense mode elements are comma-separated with no whitespace.
+func (a *arrayAdapter[E]) toJson(input *Array[E], eolIndent *string, out *strings.Builder) {
+	out.WriteByte('[')
+	if eolIndent != nil {
+		childIndent := *eolIndent + "  "
+		first := true
+		for _, elemPtr := range input.All() {
+			if !first {
+				out.WriteByte(',')
+			}
+			first = false
+			out.WriteString(childIndent)
+			a.item.toJson(elemPtr, &childIndent, out)
+		}
+		if !input.IsEmpty() {
+			out.WriteString(*eolIndent)
+		}
+	} else {
+		first := true
+		for _, elemPtr := range input.All() {
+			if !first {
+				out.WriteByte(',')
+			}
+			first = false
+			a.item.toJson(elemPtr, nil, out)
+		}
 	}
-	return *arr
+	out.WriteByte(']')
 }
 
 // fromJson accepts a JSON array or the number 0 (dense default for empty).
@@ -900,13 +986,13 @@ func NewOptionalAdapter[E any](other typeAdapter[E]) *optionalAdapter[E] {
 
 func (a *optionalAdapter[E]) isDefault(v **E) bool { return *v == nil }
 
-// toJson returns JSON null for nil; otherwise delegates to the inner adapter.
-func (a *optionalAdapter[E]) toJson(input **E, readableFlavor bool) fastjson.Value {
+// toJson writes JSON null for nil; otherwise delegates to the inner adapter.
+func (a *optionalAdapter[E]) toJson(input **E, eolIndent *string, out *strings.Builder) {
 	if *input == nil {
-		var arena fastjson.Arena
-		return *arena.NewNull()
+		out.WriteString("null")
+		return
 	}
-	return a.other.toJson(*input, readableFlavor)
+	a.other.toJson(*input, eolIndent, out)
 }
 
 // fromJson returns nil for JSON null; otherwise delegates to the inner adapter

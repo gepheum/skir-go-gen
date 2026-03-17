@@ -1,8 +1,7 @@
 package skir_client
 
 import (
-	"bytes"
-	"encoding/json"
+	"strings"
 
 	"github.com/valyala/fastjson"
 )
@@ -23,28 +22,18 @@ func newSerializer[T any](a typeAdapter[T]) Serializer[T] {
 	return Serializer[T]{adapter: a}
 }
 
-func (s Serializer[T]) ToJson(v T, flavor ...Readable) fastjson.Value {
-	return s.adapter.toJson(&v, len(flavor) > 0)
-}
-
-func (s Serializer[T]) ToJsonCode(v T, flavor ...Readable) string {
-	fv := s.adapter.toJson(&v, len(flavor) > 0)
-	raw := fv.MarshalTo(nil)
-	if len(flavor) == 0 {
-		return string(raw)
+func (s Serializer[T]) ToJson(v T, flavor ...Readable) string {
+	var out strings.Builder
+	var eolIndent *string
+	if len(flavor) > 0 {
+		i := "\n"
+		eolIndent = &i
 	}
-	var buf bytes.Buffer
-	if err := json.Indent(&buf, raw, "", "  "); err != nil {
-		panic("skir_client: ToJsonCode: " + err.Error())
-	}
-	return buf.String()
+	s.adapter.toJson(&v, eolIndent, &out)
+	return out.String()
 }
 
-func (s Serializer[T]) FromJson(j fastjson.Value, opts ...KeepUnrecognizedValues) (T, error) {
-	return s.adapter.fromJson(j, len(opts) > 0)
-}
-
-func (s Serializer[T]) FromJsonCode(code string, opts ...KeepUnrecognizedValues) (T, error) {
+func (s Serializer[T]) FromJson(code string, opts ...KeepUnrecognizedValues) (T, error) {
 	fv, err := fastjson.Parse(code)
 	if err != nil {
 		var zero T
@@ -66,7 +55,7 @@ func (s Serializer[T]) FromBytes(b []byte, opts ...KeepUnrecognizedValues) (T, e
 		return s.adapter.decode(&in, len(opts) > 0)
 	}
 	// No "skir" prefix: treat the payload as a UTF-8 JSON string.
-	return s.FromJsonCode(string(b), opts...)
+	return s.FromJson(string(b), opts...)
 }
 
 func (s Serializer[T]) TypeDescriptor() TypeDescriptor {
@@ -82,7 +71,10 @@ func (s Serializer[T]) TypeDescriptor() TypeDescriptor {
 // adapters defined inside this package can satisfy it.
 type typeAdapter[T any] interface {
 	isDefault(value *T) bool
-	toJson(input *T, readableFlavor bool) fastjson.Value
+	// toJson writes the JSON representation of input to out.
+	// eolIndent is nil for dense (compact) mode; in readable mode it is
+	// "\n" followed by the indentation of the current nesting level.
+	toJson(input *T, eolIndent *string, out *strings.Builder)
 	fromJson(json fastjson.Value, keepUnrecognizedValues bool) (T, error)
 	encode(input *T, out *binaryOutput)
 	decode(in *binaryInput, keepUnrecognizedValues bool) (T, error)

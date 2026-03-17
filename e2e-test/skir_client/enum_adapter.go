@@ -2,6 +2,8 @@ package skir_client
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/valyala/fastjson"
 )
@@ -24,7 +26,7 @@ type enumVariantEntry[T any] interface {
 	variantEntryKindOrdinal() int
 	// variantEntryConstant returns the singleton instance. Panics for wrapper variants.
 	variantEntryConstant() T
-	variantEntryToJson(input T, readable bool) fastjson.Value
+	variantEntryToJson(input T, eolIndent *string, out *strings.Builder)
 	variantEntryEncode(input T, out *binaryOutput)
 	variantEntryIsWrapper() bool
 	// wrapFromJson decodes the value part of a wrapper variant from JSON.
@@ -62,16 +64,17 @@ func (e *enumUnknownEntry[T]) variantEntryKindOrdinal() int { return 0 }
 func (e *enumUnknownEntry[T]) variantEntryConstant() T      { return e.inst }
 func (e *enumUnknownEntry[T]) variantEntryIsWrapper() bool  { return false }
 
-func (e *enumUnknownEntry[T]) variantEntryToJson(input T, readable bool) fastjson.Value {
-	var arena fastjson.Arena
-	if readable {
-		return *arena.NewString("UNKNOWN")
+func (e *enumUnknownEntry[T]) variantEntryToJson(input T, eolIndent *string, out *strings.Builder) {
+	if eolIndent != nil {
+		out.WriteString(`"UNKNOWN"`)
+		return
 	}
 	unrecognized := e.getUnrecognized(input)
 	if unrecognized != nil && unrecognized.jsonElement != nil {
-		return *unrecognized.jsonElement
+		out.Write(unrecognized.jsonElement.MarshalTo(nil))
+		return
 	}
-	return *arena.NewNumberInt(0)
+	out.WriteByte('0')
 }
 
 func (e *enumUnknownEntry[T]) variantEntryEncode(input T, out *binaryOutput) {
@@ -110,12 +113,12 @@ func (e *enumConstantEntry[T]) variantEntryKindOrdinal() int { return e.kindOrd 
 func (e *enumConstantEntry[T]) variantEntryConstant() T      { return e.inst }
 func (e *enumConstantEntry[T]) variantEntryIsWrapper() bool  { return false }
 
-func (e *enumConstantEntry[T]) variantEntryToJson(_ T, readable bool) fastjson.Value {
-	var arena fastjson.Arena
-	if readable {
-		return *arena.NewString(e.varName)
+func (e *enumConstantEntry[T]) variantEntryToJson(_ T, eolIndent *string, out *strings.Builder) {
+	if eolIndent != nil {
+		writeJsonEscapedString(e.varName, out)
+		return
 	}
-	return *arena.NewNumberInt(e.n)
+	out.WriteString(strconv.Itoa(e.n))
 }
 
 func (e *enumConstantEntry[T]) variantEntryEncode(_ T, out *binaryOutput) {
@@ -153,20 +156,27 @@ func (e *enumWrapperEntry[T, V]) variantEntryConstant() T {
 }
 func (e *enumWrapperEntry[T, V]) variantEntryIsWrapper() bool { return true }
 
-func (e *enumWrapperEntry[T, V]) variantEntryToJson(input T, readable bool) fastjson.Value {
-	var arena fastjson.Arena
+func (e *enumWrapperEntry[T, V]) variantEntryToJson(input T, eolIndent *string, out *strings.Builder) {
 	value := e.getValue(input)
-	valueJson := e.adapter.toJson(&value, readable)
-	if readable {
-		obj := arena.NewObject()
-		obj.Set("kind", arena.NewString(e.varName))
-		obj.Set("value", &valueJson)
-		return *obj
+	if eolIndent != nil {
+		childIndent := *eolIndent + "  "
+		out.WriteByte('{')
+		out.WriteString(childIndent)
+		out.WriteString(`"kind": `)
+		writeJsonEscapedString(e.varName, out)
+		out.WriteByte(',')
+		out.WriteString(childIndent)
+		out.WriteString(`"value": `)
+		e.adapter.toJson(&value, &childIndent, out)
+		out.WriteString(*eolIndent)
+		out.WriteByte('}')
+		return
 	}
-	arr := arena.NewArray()
-	arr.SetArrayItem(0, arena.NewNumberInt(e.n))
-	arr.SetArrayItem(1, &valueJson)
-	return *arr
+	out.WriteByte('[')
+	out.WriteString(strconv.Itoa(e.n))
+	out.WriteByte(',')
+	e.adapter.toJson(&value, nil, out)
+	out.WriteByte(']')
 }
 
 func (e *enumWrapperEntry[T, V]) variantEntryEncode(input T, out *binaryOutput) {
@@ -348,9 +358,9 @@ func (a *Internal__EnumAdapter[T]) isDefault(value *T) bool {
 	return a.getKindOrdinal(*value) == 0
 }
 
-func (a *Internal__EnumAdapter[T]) toJson(input *T, readable bool) fastjson.Value {
+func (a *Internal__EnumAdapter[T]) toJson(input *T, eolIndent *string, out *strings.Builder) {
 	kindOrd := a.getKindOrdinal(*input)
-	return a.kindOrdinalToEntry[kindOrd].variantEntryToJson(*input, readable)
+	a.kindOrdinalToEntry[kindOrd].variantEntryToJson(*input, eolIndent, out)
 }
 
 func (a *Internal__EnumAdapter[T]) fromJson(v fastjson.Value, keepUnrecognized bool) (T, error) {

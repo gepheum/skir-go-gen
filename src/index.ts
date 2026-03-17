@@ -1,4 +1,6 @@
+// Actually output JSON to string...
 // Look at the Arena thing...
+// Add comments on getters returning a MaybeStar about whether the pointer can be nil or not
 // RPC code
 // Reflection
 // set up CI
@@ -238,7 +240,7 @@ class GoSourceFileGenerator {
     // Write the String() method
     this.push(`func (s *${className}) String() string {\n`);
     this.push(
-      `return ${className}_serializer().ToJsonCode(*s, skir_client.Readable{})\n`,
+      `return ${className}_serializer().ToJson(*s, skir_client.Readable{})\n`,
     );
     this.push("}\n\n");
 
@@ -614,7 +616,7 @@ class GoSourceFileGenerator {
     // String() method.
     this.push(`func (e ${className}) String() string {\n`);
     this.push(
-      `return ${className}_serializer().ToJsonCode(e, skir_client.Readable{})\n`,
+      `return ${className}_serializer().ToJson(e, skir_client.Readable{})\n`,
     );
     this.push("}\n\n");
 
@@ -729,7 +731,7 @@ class GoSourceFileGenerator {
     this.push(commentify(docToCommentText(constant.doc)));
     this.push(`var _${goName} *${goType} = nil\n\n`);
     this.push("func init() {\n");
-    this.push(`  v, _ := ${serializerExpr}.FromJsonCode(${goStringLiteral})\n`);
+    this.push(`  v, _ := ${serializerExpr}.FromJson(${goStringLiteral})\n`);
     this.push(`  _${goName} = &v\n`);
     this.push("}\n\n");
     this.push(`func ${goName}() *${goType} {\n`);

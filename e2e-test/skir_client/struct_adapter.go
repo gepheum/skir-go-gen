@@ -2,6 +2,7 @@ package skir_client
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/valyala/fastjson"
 )
@@ -17,7 +18,7 @@ type internalFieldEntry[T, Builder any] interface {
 	entryNumber() int
 	entryType() TypeDescriptor
 	isEntryDefault(frozen *T) bool
-	entryToJson(frozen *T, readable bool) fastjson.Value
+	entryToJson(frozen *T, eolIndent *string, out *strings.Builder)
 	setEntryFromJson(mutable Builder, v fastjson.Value, keepUnrecognized bool) error
 	encodeEntry(frozen *T, out *binaryOutput)
 	decodeEntry(mutable Builder, in *binaryInput, keepUnrecognized bool)
@@ -40,9 +41,9 @@ func (f *typedField[T, Builder, V]) isEntryDefault(frozen *T) bool {
 	return f.adapter.isDefault(&v)
 }
 
-func (f *typedField[T, Builder, V]) entryToJson(frozen *T, readable bool) fastjson.Value {
+func (f *typedField[T, Builder, V]) entryToJson(frozen *T, eolIndent *string, out *strings.Builder) {
 	v := f.getter(frozen)
-	return f.adapter.toJson(&v, readable)
+	f.adapter.toJson(&v, eolIndent, out)
 }
 
 func (f *typedField[T, Builder, V]) setEntryFromJson(mutable Builder, fv fastjson.Value, keepUnrecognized bool) error {
@@ -218,71 +219,80 @@ func (a *Internal__StructAdapter[T, Builder]) isDefault(value *T) bool {
 	return true
 }
 
-func (a *Internal__StructAdapter[T, Builder]) toJson(input *T, readableFlavor bool) fastjson.Value {
-	if a.isDefault(input) {
-		var arena fastjson.Arena
-		if readableFlavor {
-			return *arena.NewObject()
-		}
-		return *arena.NewArray()
+func (a *Internal__StructAdapter[T, Builder]) toJson(input *T, eolIndent *string, out *strings.Builder) {
+	if eolIndent != nil {
+		a.toReadableJson(input, eolIndent, out)
+	} else {
+		a.toDenseJson(input, out)
 	}
-	if readableFlavor {
-		return a.toReadableJson(input)
-	}
-	return a.toDenseJson(input)
 }
 
-// toDenseJson serialises input as a JSON array.
+// toDenseJson writes input as a JSON array.
 // Trailing default slots are omitted (array length = last non-default slot + 1),
 // unless the struct carries unrecognized fields from a newer schema version, in
 // which case all recognised slots are written followed by the stored unrecognized
 // JSON elements.
-func (a *Internal__StructAdapter[T, Builder]) toDenseJson(input *T) fastjson.Value {
+func (a *Internal__StructAdapter[T, Builder]) toDenseJson(input *T, out *strings.Builder) {
 	unrecognized := a.getUnrecognizedFields(input)
-	var arena fastjson.Arena
-	arr := arena.NewArray()
-	zero := arena.NewNumberInt(0)
+	out.WriteByte('[')
 	if unrecognized != nil && unrecognized.jsonElements != nil {
 		// Write all recognised slots, then append the stored unrecognized elements.
 		recognizedCount := len(a.slotToEntry)
 		for i := 0; i < recognizedCount; i++ {
+			if i > 0 {
+				out.WriteByte(',')
+			}
 			if a.slotToEntry[i] != nil {
-				v := a.slotToEntry[i].entryToJson(input, false)
-				arr.SetArrayItem(i, &v)
+				a.slotToEntry[i].entryToJson(input, nil, out)
 			} else {
-				arr.SetArrayItem(i, zero)
+				out.WriteByte('0')
 			}
 		}
 		for i, elem := range unrecognized.jsonElements {
-			arr.SetArrayItem(recognizedCount+i, elem)
+			if recognizedCount+i > 0 {
+				out.WriteByte(',')
+			}
+			out.Write(elem.MarshalTo(nil))
 		}
-		return *arr
-	}
-	// No unrecognized fields: omit trailing default slots.
-	slotCount := a.getSlotCount(input)
-	for i := 0; i < slotCount; i++ {
-		if i < len(a.slotToEntry) && a.slotToEntry[i] != nil {
-			v := a.slotToEntry[i].entryToJson(input, false)
-			arr.SetArrayItem(i, &v)
-		} else {
-			arr.SetArrayItem(i, zero)
+	} else {
+		// No unrecognized fields: omit trailing default slots.
+		slotCount := a.getSlotCount(input)
+		for i := 0; i < slotCount; i++ {
+			if i > 0 {
+				out.WriteByte(',')
+			}
+			if i < len(a.slotToEntry) && a.slotToEntry[i] != nil {
+				a.slotToEntry[i].entryToJson(input, nil, out)
+			} else {
+				out.WriteByte('0')
+			}
 		}
 	}
-	return *arr
+	out.WriteByte(']')
 }
 
-// toReadableJson serialises input as a JSON object, omitting default fields.
-func (a *Internal__StructAdapter[T, Builder]) toReadableJson(input *T) fastjson.Value {
-	var arena fastjson.Arena
-	obj := arena.NewObject()
+// toReadableJson writes input as a JSON object, omitting default fields.
+func (a *Internal__StructAdapter[T, Builder]) toReadableJson(input *T, eolIndent *string, out *strings.Builder) {
+	out.WriteByte('{')
+	childIndent := *eolIndent + "  "
+	first := true
 	for _, e := range a.orderedEntries {
 		if e.isEntryDefault(input) {
 			continue
 		}
-		v := e.entryToJson(input, true)
-		obj.Set(e.entryName(), &v)
+		if !first {
+			out.WriteByte(',')
+		}
+		first = false
+		out.WriteString(childIndent)
+		writeJsonEscapedString(e.entryName(), out)
+		out.WriteString(": ")
+		e.entryToJson(input, &childIndent, out)
 	}
-	return *obj
+	if !first {
+		out.WriteString(*eolIndent)
+	}
+	out.WriteByte('}')
 }
 
 // getSlotCount returns the number of slots needed to encode input:

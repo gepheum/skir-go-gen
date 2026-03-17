@@ -6,19 +6,13 @@ import (
 	"github.com/valyala/fastjson"
 )
 
-// ParseFromJson parses a TypeDescriptor from a *fastjson.Value (as produced
-// by TypeDescriptor.AsJson).
-func ParseFromJson(v *fastjson.Value) (TypeDescriptor, error) {
-	return parseTypeDescriptorFromValue(v)
-}
-
-// ParseFromJsonCode parses a TypeDescriptor from its JSON string representation
-// (as produced by TypeDescriptor.AsJsonCode).
-func ParseFromJsonCode(jsonCode string) (TypeDescriptor, error) {
+// ParseTypeDescriptorFromJson parses a TypeDescriptor from its JSON string
+// representation (as produced by TypeDescriptor.AsJson).
+func ParseTypeDescriptorFromJson(jsonCode string) (TypeDescriptor, error) {
 	var p fastjson.Parser
 	v, err := p.Parse(jsonCode)
 	if err != nil {
-		return nil, fmt.Errorf("skir_client.ParseFromJsonCode: %w", err)
+		return nil, fmt.Errorf("skir_client.ParseTypeDescriptorFromJson: %w", err)
 	}
 	return parseTypeDescriptorFromValue(v)
 }
