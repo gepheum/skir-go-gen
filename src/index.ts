@@ -1,7 +1,6 @@
 // RPC code
 // Reflection
 // set up CI
-// Use real `const`s for constants... No pointer type for consts if not complex type...
 
 import {
   type CodeGenerator,
@@ -836,19 +835,25 @@ class GoSourceFileGenerator {
     );
     const type = constant.type!;
     const goType = typeSpeller.getGoType(type);
-    const serializerExpr = typeSpeller.getSerializerExpression(type);
-    const goStringLiteral = toGoStringLiteral(
-      JSON.stringify(constant.valueAsDenseJson),
-    );
     this.push(commentify(docToCommentText(constant.doc)));
-    this.push(`var _${goName} *${goType} = nil\n\n`);
-    this.push("func init() {\n");
-    this.push(`  v, _ := ${serializerExpr}.FromJson(${goStringLiteral})\n`);
-    this.push(`  _${goName} = &v\n`);
-    this.push("}\n\n");
-    this.push(`func ${goName}() *${goType} {\n`);
-    this.push(`  return _${goName}\n`);
-    this.push("}\n\n");
+    const goLiteral = tryGetGoLiteral(constant);
+    if (goLiteral) {
+      this.push(`const ${goName} ${goType} = ${goLiteral}\n\n`);
+    } else {
+      const isStructType = this.isStructType(type);
+      const serializerExpr = typeSpeller.getSerializerExpression(type);
+      const goStringLiteral = toGoStringLiteral(
+        JSON.stringify(constant.valueAsDenseJson),
+      );
+      this.push(`var _${goName} *${goType} = nil\n\n`);
+      this.push("func init() {\n");
+      this.push(`  v, _ := ${serializerExpr}.FromJson(${goStringLiteral})\n`);
+      this.push(`  _${goName} = &v\n`);
+      this.push("}\n\n");
+      this.push(`func ${goName}() ${isStructType ? "*" : ""}${goType} {\n`);
+      this.push(`  return ${isStructType ? "" : "*"}_${goName}\n`);
+      this.push("}\n\n");
+    }
   }
 
   private getKeyedArrayHelper(type: ResolvedType): KeyedArrayHelper | null {
@@ -1063,6 +1068,39 @@ function toGoStringLiteral(input: string): string {
     .replace(/\r/g, "\\r") // Escape carriage returns
     .replace(/\t/g, "\\t"); // Escape tabs
   return `"${escaped}"`;
+}
+
+function tryGetGoLiteral(constant: Constant): string | null {
+  const type = constant.type!;
+  if (type.kind !== "primitive") {
+    return null;
+  }
+  const valueAsDenseJson = constant.valueAsDenseJson!;
+  switch (type.primitive) {
+    case "bool":
+      return valueAsDenseJson ? "true" : "false";
+    case "int32":
+    case "int64":
+    case "hash64":
+    case "float32":
+    case "float64": {
+      const maybeQuoted = valueAsDenseJson.toString();
+      if (
+        maybeQuoted === "Infinity" ||
+        maybeQuoted === "-Infinity" ||
+        maybeQuoted === "NaN"
+      ) {
+        return null;
+      } else {
+        return maybeQuoted.startsWith('"') && maybeQuoted.endsWith('"')
+          ? maybeQuoted.slice(1, -1)
+          : maybeQuoted;
+      }
+    }
+    case "string":
+      return toGoStringLiteral(valueAsDenseJson as string);
+  }
+  return null;
 }
 
 function commentify(textOrLines: string | readonly string[]): string {
