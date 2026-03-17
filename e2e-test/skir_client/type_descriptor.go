@@ -2,17 +2,15 @@
 //
 // A TypeDescriptor describes a skir type (primitive, optional, array, struct or enum)
 // and can serialize itself to a self-contained JSON representation, as well as be
-// reconstructed from such a representation via ParseFromJson / ParseFromJsonCode.
+// reconstructed from such a representation via ParseTypeDescriptorFromJson.
 package skir_client
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
-
-	"github.com/valyala/fastjson"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -78,13 +76,8 @@ type TypeDescriptor interface {
 	sealTypeDescriptor()
 
 	// AsJson returns the complete, self-describing JSON representation of this
-	// type descriptor.
-	// The value is backed by a freshly allocated fastjson.Arena; callers must
-	// not retain the value after the Arena is reset or GC'd.
-	AsJson() *fastjson.Value
-
-	// AsJsonCode returns a human-readable (indented) version of AsJson.
-	AsJsonCode() string
+	// type descriptor as a compact JSON string.
+	AsJson() string
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -135,9 +128,8 @@ func primitiveDescriptorByType(pt PrimitiveType) *PrimitiveDescriptor {
 	}
 }
 
-func (d *PrimitiveDescriptor) sealTypeDescriptor()     {}
-func (d *PrimitiveDescriptor) AsJson() *fastjson.Value { return typeDescriptorToFjv(d) }
-func (d *PrimitiveDescriptor) AsJsonCode() string      { return typeDescriptorToJsonCode(d) }
+func (d *PrimitiveDescriptor) sealTypeDescriptor() {}
+func (d *PrimitiveDescriptor) AsJson() string      { return typeDescriptorToJson(d) }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OptionalDescriptor
@@ -150,9 +142,8 @@ type OptionalDescriptor struct {
 	OtherType TypeDescriptor
 }
 
-func (d *OptionalDescriptor) sealTypeDescriptor()     {}
-func (d *OptionalDescriptor) AsJson() *fastjson.Value { return typeDescriptorToFjv(d) }
-func (d *OptionalDescriptor) AsJsonCode() string      { return typeDescriptorToJsonCode(d) }
+func (d *OptionalDescriptor) sealTypeDescriptor() {}
+func (d *OptionalDescriptor) AsJson() string      { return typeDescriptorToJson(d) }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ArrayDescriptor
@@ -169,9 +160,8 @@ type ArrayDescriptor struct {
 	KeyExtractor string
 }
 
-func (d *ArrayDescriptor) sealTypeDescriptor()     {}
-func (d *ArrayDescriptor) AsJson() *fastjson.Value { return typeDescriptorToFjv(d) }
-func (d *ArrayDescriptor) AsJsonCode() string      { return typeDescriptorToJsonCode(d) }
+func (d *ArrayDescriptor) sealTypeDescriptor() {}
+func (d *ArrayDescriptor) AsJson() string      { return typeDescriptorToJson(d) }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FieldOrVariant
@@ -319,8 +309,7 @@ func (d *StructDescriptor) GetModulePath() string               { return d.modul
 func (d *StructDescriptor) GetDoc() string                      { return d.Doc }
 func (d *StructDescriptor) GetRemovedNumbers() map[int]struct{} { return d.RemovedNumbers }
 func (d *StructDescriptor) recordId() string                    { return d.modulePath + ":" + d.qualifiedName }
-func (d *StructDescriptor) AsJson() *fastjson.Value             { return typeDescriptorToFjv(d) }
-func (d *StructDescriptor) AsJsonCode() string                  { return typeDescriptorToJsonCode(d) }
+func (d *StructDescriptor) AsJson() string                      { return typeDescriptorToJson(d) }
 
 func (d *StructDescriptor) initLookups() {
 	d.once.Do(func() {
@@ -388,8 +377,7 @@ func (d *EnumDescriptor) GetModulePath() string               { return d.moduleP
 func (d *EnumDescriptor) GetDoc() string                      { return d.Doc }
 func (d *EnumDescriptor) GetRemovedNumbers() map[int]struct{} { return d.RemovedNumbers }
 func (d *EnumDescriptor) recordId() string                    { return d.modulePath + ":" + d.qualifiedName }
-func (d *EnumDescriptor) AsJson() *fastjson.Value             { return typeDescriptorToFjv(d) }
-func (d *EnumDescriptor) AsJsonCode() string                  { return typeDescriptorToJsonCode(d) }
+func (d *EnumDescriptor) AsJson() string                      { return typeDescriptorToJson(d) }
 
 func (d *EnumDescriptor) initLookups() {
 	d.once.Do(func() {
@@ -420,14 +408,14 @@ func (d *EnumDescriptor) GetVariantByNumber(number int) EnumVariant {
 // JSON serialization
 // ─────────────────────────────────────────────────────────────────────────────
 
-// typeDescriptorToFjv serialises td to a *fastjson.Value using a fresh Arena:
+// typeDescriptorToJson serialises td to a compact JSON string:
 //
-//	{ "type": <type-signature>, "records": [ <record-definition>, ... ] }
-func typeDescriptorToFjv(td TypeDescriptor) *fastjson.Value {
-	a := &fastjson.Arena{}
+//	{"type":<type-signature>,"records":[<record-definition>,...] }
+func typeDescriptorToJson(td TypeDescriptor) string {
+	var out strings.Builder
 
 	var order []string
-	recordIdToFjv := map[string]*fastjson.Value{}
+	recordIdToJson := map[string]string{}
 
 	var addRecordDefinitions func(t TypeDescriptor)
 	addRecordDefinitions = func(t TypeDescriptor) {
@@ -440,74 +428,98 @@ func typeDescriptorToFjv(td TypeDescriptor) *fastjson.Value {
 			addRecordDefinitions(v.ItemType)
 		case *StructDescriptor:
 			rid := v.recordId()
-			if _, seen := recordIdToFjv[rid]; seen {
+			if _, seen := recordIdToJson[rid]; seen {
 				return
 			}
-			removedSlice := removedNumbersToSortedSlice(v.RemovedNumbers)
-			fieldsArr := a.NewArray()
-			for i, f := range v.Fields {
-				entry := a.NewObject()
-				entry.Set("name", a.NewString(f.Name))
-				entry.Set("number", a.NewNumberInt(f.Number))
-				entry.Set("type", typeSignatureToFjv(f.Type, a))
-				if f.Doc != "" {
-					entry.Set("doc", a.NewString(f.Doc))
-				}
-				fieldsArr.SetArrayItem(i, entry)
-			}
-			def := a.NewObject()
-			def.Set("kind", a.NewString("struct"))
-			def.Set("id", a.NewString(rid))
+			recordIdToJson[rid] = "" // mark as in-progress to break cycles
+			var sb strings.Builder
+			sb.WriteString(`{"kind":"struct","id":`)
+			writeJsonEscapedString(rid, &sb)
 			if v.Doc != "" {
-				def.Set("doc", a.NewString(v.Doc))
+				sb.WriteString(`,"doc":`)
+				writeJsonEscapedString(v.Doc, &sb)
 			}
-			def.Set("fields", fieldsArr)
-			if len(removedSlice) > 0 {
-				rnArr := a.NewArray()
-				for i, n := range removedSlice {
-					rnArr.SetArrayItem(i, a.NewNumberInt(n))
+			sb.WriteString(`,"fields":[`)
+			for i, f := range v.Fields {
+				if i > 0 {
+					sb.WriteByte(',')
 				}
-				def.Set("removed_numbers", rnArr)
+				sb.WriteString(`{"name":`)
+				writeJsonEscapedString(f.Name, &sb)
+				sb.WriteString(`,"number":`)
+				sb.WriteString(strconv.Itoa(f.Number))
+				sb.WriteString(`,"type":`)
+				typeSignatureToJson(f.Type, &sb)
+				if f.Doc != "" {
+					sb.WriteString(`,"doc":`)
+					writeJsonEscapedString(f.Doc, &sb)
+				}
+				sb.WriteByte('}')
 			}
-			recordIdToFjv[rid] = def
+			sb.WriteByte(']')
+			removedSlice := removedNumbersToSortedSlice(v.RemovedNumbers)
+			if len(removedSlice) > 0 {
+				sb.WriteString(`,"removed_numbers":[`)
+				for i, n := range removedSlice {
+					if i > 0 {
+						sb.WriteByte(',')
+					}
+					sb.WriteString(strconv.Itoa(n))
+				}
+				sb.WriteByte(']')
+			}
+			sb.WriteByte('}')
+			recordIdToJson[rid] = sb.String()
 			order = append(order, rid)
 			for _, f := range v.Fields {
 				addRecordDefinitions(f.Type)
 			}
 		case *EnumDescriptor:
 			rid := v.recordId()
-			if _, seen := recordIdToFjv[rid]; seen {
+			if _, seen := recordIdToJson[rid]; seen {
 				return
 			}
-			removedSlice := removedNumbersToSortedSlice(v.RemovedNumbers)
-			variantsArr := a.NewArray()
+			recordIdToJson[rid] = "" // mark as in-progress to break cycles
+			var sb strings.Builder
+			sb.WriteString(`{"kind":"enum","id":`)
+			writeJsonEscapedString(rid, &sb)
+			if v.Doc != "" {
+				sb.WriteString(`,"doc":`)
+				writeJsonEscapedString(v.Doc, &sb)
+			}
+			sb.WriteString(`,"variants":[`)
 			for i, variant := range v.Variants {
-				entry := a.NewObject()
-				entry.Set("name", a.NewString(variant.GetName()))
-				entry.Set("number", a.NewNumberInt(variant.GetNumber()))
+				if i > 0 {
+					sb.WriteByte(',')
+				}
+				sb.WriteString(`{"name":`)
+				writeJsonEscapedString(variant.GetName(), &sb)
+				sb.WriteString(`,"number":`)
+				sb.WriteString(strconv.Itoa(variant.GetNumber()))
 				if w, ok := variant.(*EnumWrapperVariant); ok {
-					entry.Set("type", typeSignatureToFjv(w.Type, a))
+					sb.WriteString(`,"type":`)
+					typeSignatureToJson(w.Type, &sb)
 				}
 				if variant.GetDoc() != "" {
-					entry.Set("doc", a.NewString(variant.GetDoc()))
+					sb.WriteString(`,"doc":`)
+					writeJsonEscapedString(variant.GetDoc(), &sb)
 				}
-				variantsArr.SetArrayItem(i, entry)
+				sb.WriteByte('}')
 			}
-			def := a.NewObject()
-			def.Set("kind", a.NewString("enum"))
-			def.Set("id", a.NewString(rid))
-			if v.Doc != "" {
-				def.Set("doc", a.NewString(v.Doc))
-			}
-			def.Set("variants", variantsArr)
+			sb.WriteByte(']')
+			removedSlice := removedNumbersToSortedSlice(v.RemovedNumbers)
 			if len(removedSlice) > 0 {
-				rnArr := a.NewArray()
+				sb.WriteString(`,"removed_numbers":[`)
 				for i, n := range removedSlice {
-					rnArr.SetArrayItem(i, a.NewNumberInt(n))
+					if i > 0 {
+						sb.WriteByte(',')
+					}
+					sb.WriteString(strconv.Itoa(n))
 				}
-				def.Set("removed_numbers", rnArr)
+				sb.WriteByte(']')
 			}
-			recordIdToFjv[rid] = def
+			sb.WriteByte('}')
+			recordIdToJson[rid] = sb.String()
 			order = append(order, rid)
 			for _, variant := range v.Variants {
 				if w, ok := variant.(*EnumWrapperVariant); ok {
@@ -519,63 +531,49 @@ func typeDescriptorToFjv(td TypeDescriptor) *fastjson.Value {
 
 	addRecordDefinitions(td)
 
-	recordsArr := a.NewArray()
+	out.WriteString(`{"type":`)
+	typeSignatureToJson(td, &out)
+	out.WriteString(`,"records":[`)
 	for i, id := range order {
-		recordsArr.SetArrayItem(i, recordIdToFjv[id])
+		if i > 0 {
+			out.WriteByte(',')
+		}
+		out.WriteString(recordIdToJson[id])
 	}
-
-	root := a.NewObject()
-	root.Set("type", typeSignatureToFjv(td, a))
-	root.Set("records", recordsArr)
-	return root
+	out.WriteString(`]}`)
+	return out.String()
 }
 
-// typeDescriptorToJsonCode returns a pretty-printed (2-space indent) JSON string.
-func typeDescriptorToJsonCode(td TypeDescriptor) string {
-	raw := td.AsJson().MarshalTo(nil)
-	var buf bytes.Buffer
-	if err := json.Indent(&buf, raw, "", "  "); err != nil {
-		panic(fmt.Sprintf("skir_client: typeDescriptorToJsonCode: %v", err))
-	}
-	return buf.String()
-}
-
-// typeSignatureToFjv returns the compact "type signature" *fastjson.Value for td.
+// typeSignatureToJson writes the compact "type signature" JSON for td to out.
 // This is the value stored under the "type" key of fields and of the root document.
-func typeSignatureToFjv(td TypeDescriptor, a *fastjson.Arena) *fastjson.Value {
+func typeSignatureToJson(td TypeDescriptor, out *strings.Builder) {
 	switch v := td.(type) {
 	case *PrimitiveDescriptor:
-		obj := a.NewObject()
-		obj.Set("kind", a.NewString("primitive"))
-		obj.Set("value", a.NewString(v.PrimitiveType.String()))
-		return obj
+		out.WriteString(`{"kind":"primitive","value":"`)
+		out.WriteString(v.PrimitiveType.String())
+		out.WriteString(`"}`)
 	case *OptionalDescriptor:
-		obj := a.NewObject()
-		obj.Set("kind", a.NewString("optional"))
-		obj.Set("value", typeSignatureToFjv(v.OtherType, a))
-		return obj
+		out.WriteString(`{"kind":"optional","value":`)
+		typeSignatureToJson(v.OtherType, out)
+		out.WriteByte('}')
 	case *ArrayDescriptor:
-		item := a.NewObject()
-		item.Set("item", typeSignatureToFjv(v.ItemType, a))
+		out.WriteString(`{"kind":"array","value":{"item":`)
+		typeSignatureToJson(v.ItemType, out)
 		if v.KeyExtractor != "" {
-			item.Set("key_extractor", a.NewString(v.KeyExtractor))
+			out.WriteString(`,"key_extractor":`)
+			writeJsonEscapedString(v.KeyExtractor, out)
 		}
-		obj := a.NewObject()
-		obj.Set("kind", a.NewString("array"))
-		obj.Set("value", item)
-		return obj
+		out.WriteString(`}}`)
 	case *StructDescriptor:
-		obj := a.NewObject()
-		obj.Set("kind", a.NewString("record"))
-		obj.Set("value", a.NewString(v.recordId()))
-		return obj
+		out.WriteString(`{"kind":"record","value":`)
+		writeJsonEscapedString(v.recordId(), out)
+		out.WriteByte('}')
 	case *EnumDescriptor:
-		obj := a.NewObject()
-		obj.Set("kind", a.NewString("record"))
-		obj.Set("value", a.NewString(v.recordId()))
-		return obj
+		out.WriteString(`{"kind":"record","value":`)
+		writeJsonEscapedString(v.recordId(), out)
+		out.WriteByte('}')
 	default:
-		panic(fmt.Sprintf("skir_client: typeSignatureToFjv: unknown TypeDescriptor %T", td))
+		panic(fmt.Sprintf("skir_client: typeSignatureToJson: unknown TypeDescriptor %T", td))
 	}
 }
 
