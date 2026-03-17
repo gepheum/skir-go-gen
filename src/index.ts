@@ -1,5 +1,3 @@
-// Actually output JSON to string...
-// Look at the Arena thing...
 // Add comments on getters returning a MaybeStar about whether the pointer can be nil or not
 // RPC code
 // Reflection
@@ -557,9 +555,21 @@ class GoSourceFileGenerator {
     // Unwrap...() methods for wrapper variants.
     for (const variant of wrapperVariants) {
       const name = convertCase(variant.name.text, "UpperCamel");
-      const goType = typeSpeller.getGoType(variant.type!);
-      const isStructType = this.isStructType(variant.type!);
+      const type = variant.type!;
+      const goType = typeSpeller.getGoType(type);
+      const isStructType = this.isStructType(type);
       const returnType = isStructType ? `*${goType}` : goType;
+      if (isStructType) {
+        this.push(
+          `// Unwrap${name} returns the value wrapped in this ${className}.\n// The return value is never nil.\n`,
+        );
+      } else if (type.kind === "optional") {
+        this.push(
+          `// Unwrap${name} returns the value wrapped in this ${className}.\n// The return value may be nil.\n`,
+        );
+      } else {
+        this.push(`// Unwrap${name} returns the value wrapped in this ${className}.\n`);
+      }
       this.push(`func (e ${className}) Unwrap${name}() ${returnType} {\n`);
       this.push(`if e.kind != ${kindType}_${name}Wrapper {\n`);
       this.push(

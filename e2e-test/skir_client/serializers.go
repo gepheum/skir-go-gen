@@ -173,7 +173,7 @@ func decodeNumber(in *binaryInput) int64 {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// int32Adapter – Internal_TypeAdapter[int32]
+// int32Adapter
 // ─────────────────────────────────────────────────────────────────────────────
 
 type int32Adapter struct{}
@@ -247,7 +247,7 @@ func (a *int32Adapter) decode(in *binaryInput, _ bool) (int32, error) {
 func (a *int32Adapter) typeDescriptor() TypeDescriptor { return Int32Descriptor }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// int64Adapter – Internal_TypeAdapter[int64]
+// int64Adapter
 // ─────────────────────────────────────────────────────────────────────────────
 
 // maxSafeInt64JSON is Number.MAX_SAFE_INTEGER = 2^53 - 1.
@@ -325,7 +325,7 @@ func (a *int64Adapter) typeDescriptor() TypeDescriptor { return Int64Descriptor 
 var int32AdapterSingleton = &int32Adapter{}
 
 // ─────────────────────────────────────────────────────────────────────────────
-// hash64Adapter – Internal_TypeAdapter[uint64]
+// hash64Adapter
 // ─────────────────────────────────────────────────────────────────────────────
 
 // maxSafeHash64JSON is Number.MAX_SAFE_INTEGER = 2^53 - 1, as uint64.
@@ -423,7 +423,7 @@ func floatSpecialString(f float64) string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// float32Adapter – Internal_TypeAdapter[float32]
+// float32Adapter
 // ─────────────────────────────────────────────────────────────────────────────
 
 type float32Adapter struct{}
@@ -495,7 +495,7 @@ func (a *float32Adapter) decode(in *binaryInput, _ bool) (float32, error) {
 func (a *float32Adapter) typeDescriptor() TypeDescriptor { return Float32Descriptor }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// float64Adapter – Internal_TypeAdapter[float64]
+// float64Adapter
 // ─────────────────────────────────────────────────────────────────────────────
 
 type float64Adapter struct{}
@@ -556,7 +556,7 @@ func (a *float64Adapter) decode(in *binaryInput, _ bool) (float64, error) {
 func (a *float64Adapter) typeDescriptor() TypeDescriptor { return Float64Descriptor }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// timestampAdapter – Internal_TypeAdapter[time.Time]
+// timestampAdapter
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Valid unix-millisecond range, matching Timestamp.MIN / Timestamp.MAX in
@@ -691,7 +691,7 @@ func encodeUint32(n uint32, out *binaryOutput) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// stringAdapter – Internal_TypeAdapter[string]
+// stringAdapter
 // ─────────────────────────────────────────────────────────────────────────────
 
 type stringAdapter struct{}
@@ -761,7 +761,7 @@ func (a *stringAdapter) decode(in *binaryInput, _ bool) (string, error) {
 func (a *stringAdapter) typeDescriptor() TypeDescriptor { return StringDescriptor }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// bytesAdapter – Internal_TypeAdapter[Bytes]
+// bytesAdapter
 // ─────────────────────────────────────────────────────────────────────────────
 
 type bytesAdapter struct{}
