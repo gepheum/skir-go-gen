@@ -656,7 +656,27 @@ class GoSourceFileGenerator {
     this.push("}\n\n");
   }
 
-  private writeMethod(method: Method): void {}
+  private writeMethod(method: Method): void {
+    const { typeSpeller } = this;
+    const name = method.name.text;
+    const requestGoType = typeSpeller.getGoType(method.requestType!);
+    const responseGoType = typeSpeller.getGoType(method.responseType!);
+    const requestSerializerExpr = typeSpeller.getSerializerExpression(
+      method.requestType!,
+    );
+    const responseSerializerExpr = typeSpeller.getSerializerExpression(
+      method.responseType!,
+    );
+    this.push(
+      `var ${convertCase(name, "UpperCamel")}_method = skir_client.Method[${requestGoType}, ${responseGoType}]{\n`,
+    );
+    this.push(`Name: ${toGoStringLiteral(name)},\n`);
+    this.push(`Number: ${method.number},\n`);
+    this.push(`RequestSerializer: ${requestSerializerExpr},\n`);
+    this.push(`ResponseSerializer: ${responseSerializerExpr},\n`);
+    this.push(`Doc: ${toGoStringLiteral(method.doc.text)},\n`);
+    this.push("}\n\n");
+  }
 
   private writeConstant(constant: Constant): void {
     const { typeSpeller } = this;
