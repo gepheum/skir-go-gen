@@ -1,9 +1,8 @@
-// Comments
 // Set...FromSlice With...FromSlice
-// ToString()
 // RPC code
 // Reflection
 // set up CI
+// Use real `const`s for constants... No pointer type for consts if not complex type...
 
 import {
   type CodeGenerator,
@@ -142,7 +141,9 @@ class GoSourceFileGenerator {
     const className = getClassName(struct);
 
     // Define the frozen struct.
-    this.push(commentify([docToCommentText(struct.record.doc), "\nDeeply immutable."]));
+    this.push(
+      commentify([docToCommentText(struct.record.doc), "\nDeeply immutable."]),
+    );
     this.push(`type ${className} struct {\n`);
     for (const field of fields) {
       const fieldName = "_" + convertCase(field.name.text, "lowerCamel");
@@ -224,28 +225,12 @@ class GoSourceFileGenerator {
       this.push("}\n\n");
     }
 
-    // Write the withers.
-    for (const field of fields) {
-      const fieldName = convertCase(field.name.text, "UpperCamel");
-      const goType = typeSpeller.getGoType(field.type!);
-      const fieldAccess = "_" + convertCase(field.name.text, "lowerCamel");
-      this.push(
-        `func (s ${className}) With${fieldName}(v ${goType}) ${className} {\n`,
-      );
-      if (field.isRecursive === "hard") {
-        this.push(`  s.${fieldAccess} = &v\n`);
-      } else {
-        this.push(`  s.${fieldAccess} = v\n`);
-      }
-      const witherKeyedArrayHelper = this.getKeyedArrayHelper(field.type!);
-      if (witherKeyedArrayHelper) {
-        this.push(
-          `  s.${fieldAccess}_indexed = &atomic.Pointer[${witherKeyedArrayHelper.mapType}]{}\n`,
-        );
-      }
-      this.push(`  return s\n`);
-      this.push("}\n\n");
-    }
+    // Write the String() method
+    this.push(`func (s *${className}) String() string {\n`);
+    this.push(
+      `return ${className}_serializer().ToJsonCode(*s, skir_client.Readable{})\n`,
+    );
+    this.push("}\n\n");
 
     // Write ToBuilder() method.
     this.push(
@@ -468,7 +453,9 @@ class GoSourceFileGenerator {
     this.push(")\n\n");
 
     // Define the frozen enum struct.
-    this.push(commentify([docToCommentText(record.record.doc), "\nDeeply immutable."]));
+    this.push(
+      commentify([docToCommentText(record.record.doc), "\nDeeply immutable."]),
+    );
     this.push(`type ${className} struct {\n`);
     this.push(`kind ${kindType}\n`);
     this.push("value any\n");
@@ -501,7 +488,9 @@ class GoSourceFileGenerator {
     }
 
     // Factory functions for constant variants.
-    this.push(`// ${className}_Unknown is the default value for fields of type ${className}.\n`);
+    this.push(
+      `// ${className}_Unknown is the default value for fields of type ${className}.\n`,
+    );
     this.push(`func ${className}_Unknown() ${className} {\n`);
     this.push(`return ${className}{}\n`);
     this.push("}\n\n");
@@ -584,6 +573,13 @@ class GoSourceFileGenerator {
     this.push("default:\n");
     this.push("return v.OnUnknown()\n");
     this.push("}\n");
+    this.push("}\n\n");
+
+    // String() method.
+    this.push(`func (e ${className}) String() string {\n`);
+    this.push(
+      `return ${className}_serializer().ToJsonCode(e, skir_client.Readable{})\n`,
+    );
     this.push("}\n\n");
 
     // Adapter.

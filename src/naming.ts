@@ -20,7 +20,9 @@ export function modulePathToAlias(modulePath: string): string {
 export function structFieldToGetterName(field: Field | string): string {
   const skirName = typeof field === "string" ? field : field.name.text;
   const upperCamel = convertCase(skirName, "UpperCamel");
-  return skirName.startsWith("with_") || skirName.startsWith("search_")
+  return skirName.startsWith("search_") ||
+    skirName === "string" ||
+    skirName === "to_builder"
     ? upperCamel.concat("_")
     : upperCamel;
 }
