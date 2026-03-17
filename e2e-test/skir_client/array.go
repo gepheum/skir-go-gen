@@ -36,7 +36,7 @@ func (a Array[T]) At(i int) *T {
 	return &a.s[i]
 }
 
-// Slice returns a copy of the underlying elements as a []T.
+// ToSlice returns a copy of the underlying elements as a []T.
 func (a Array[T]) ToSlice() []T {
 	c := make([]T, len(a.s))
 	copy(c, a.s)

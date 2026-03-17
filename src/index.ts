@@ -1,4 +1,4 @@
-// Set...FromSlice With...FromSlice
+// Look at the Arena thing...
 // RPC code
 // Reflection
 // set up CI
@@ -97,12 +97,18 @@ class GoSourceFileGenerator {
       }
     }
 
-    for (const method of this.inModule.methods) {
-      this.writeMethod(method);
+    if (this.inModule.methods.length) {
+      this.pushSeparator("Methods");
+      for (const method of this.inModule.methods) {
+        this.writeMethod(method);
+      }
     }
 
-    for (const constant of this.inModule.constants) {
-      this.writeConstant(constant);
+    if (this.inModule.constants.length) {
+      this.pushSeparator("Constants");
+      for (const constant of this.inModule.constants) {
+        this.writeConstant(constant);
+      }
     }
 
     // To disable unused import errors.
@@ -133,7 +139,11 @@ class GoSourceFileGenerator {
   }
 
   private writeTypesForStruct(struct: RecordLocation): void {
-    this.push(`// ${"-".repeat(78)}\n\n`);
+    this.pushSeparator(
+      "struct ".concat(
+        struct.recordAncestors.map((r) => r.name.text).join("."),
+      ),
+    );
     const { typeSpeller } = this;
     const fields = [...struct.record.fields].sort((a, b) =>
       a.name.text.localeCompare(b.name.text),
@@ -251,6 +261,10 @@ class GoSourceFileGenerator {
       this.push(`type ${fieldToBuilderName(field)} interface {\n`);
       const returnType = fieldToBuilderName(nextField);
       this.push(`Set${fieldName}(v ${fieldType}) ${returnType}\n`);
+      if (field.type!.kind === "array") {
+        const itemType = typeSpeller.getGoType(field.type!.item);
+        this.push(`Set${fieldName}_fromSlice(v []${itemType}) ${returnType}\n`);
+      }
       this.push("}\n\n");
     }
     this.push(`type ${className}_builderDone interface {\n`);
@@ -286,6 +300,16 @@ class GoSourceFileGenerator {
       }
       this.push("  return b\n");
       this.push("}\n\n");
+      if (field.type!.kind === "array") {
+        const itemType = typeSpeller.getGoType(field.type!.item);
+        this.push(
+          `func (b *${builderName}) Set${fieldName}_fromSlice(v []${itemType}) ${returnType} {\n`,
+        );
+        this.push(
+          `  return b.Set${fieldName}(skir_client.ArrayFromSlice(v))\n`,
+        );
+        this.push("}\n\n");
+      }
     }
 
     // Write the Build() method of the builder.
@@ -329,6 +353,16 @@ class GoSourceFileGenerator {
       }
       this.push("  return b\n");
       this.push("}\n\n");
+      if (field.type!.kind === "array") {
+        const itemType = typeSpeller.getGoType(field.type!.item);
+        this.push(
+          `func (b *${builderTypeName}) Set${fieldName}_fromSlice(v []${itemType}) *${builderTypeName} {\n`,
+        );
+        this.push(
+          `  return b.Set${fieldName}(skir_client.ArrayFromSlice(v))\n`,
+        );
+        this.push("}\n\n");
+      }
     }
 
     // Write Build() for the partial builder.
@@ -425,7 +459,9 @@ class GoSourceFileGenerator {
   }
 
   private writeTypesForEnum(record: RecordLocation): void {
-    this.push(`// ${"-".repeat(78)}\n\n`);
+    this.pushSeparator(
+      "enum ".concat(record.recordAncestors.map((r) => r.name.text).join(".")),
+    );
     const { typeSpeller } = this;
     const variants = [...record.record.fields].sort((a, b) =>
       a.name.text.localeCompare(b.name.text),
@@ -775,6 +811,12 @@ class GoSourceFileGenerator {
       type.kind === "record" &&
       this.typeSpeller.recordMap.get(type.key)?.record.recordType === "struct"
     );
+  }
+
+  private pushSeparator(header: string): void {
+    this.push(`// ${"=".repeat(78)}\n`);
+    this.push(`// ${header}\n`);
+    this.push(`// ${"=".repeat(78)}\n\n`);
   }
 
   private push(...code: string[]): void {
