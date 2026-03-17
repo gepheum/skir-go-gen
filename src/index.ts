@@ -443,7 +443,7 @@ class GoSourceFileGenerator {
         : typeSpeller.getSerializerExpression(field.type!);
       const storedGoType = isHardRecursive ? `*${goType}` : goType;
       this.push(
-        `skir_client.AddField(\n` +
+        `skir_client.Internal__AddField(\n` +
           `_${className}_adapter,\n` +
           `${toGoStringLiteral(field.name.text)},\n` +
           `${field.number},\n` +
@@ -676,7 +676,7 @@ class GoSourceFileGenerator {
         ? `func(e ${className}) ${goType} { return *e.Unwrap${name}() }`
         : `func(e ${className}) ${goType} { return e.Unwrap${name}() }`;
       this.push(
-        `skir_client.AddWrapperVariant(\n` +
+        `skir_client.Internal__AddWrapperVariant(\n` +
           `_${className}_adapter,\n` +
           `${variant.number},\n` +
           `${toGoStringLiteral(variant.name.text)},\n` +

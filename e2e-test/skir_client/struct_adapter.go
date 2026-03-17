@@ -128,7 +128,7 @@ func Internal__NewStructAdapter[T, Builder any](
 //
 // This is a package-level function (not a method) because Go does not permit
 // additional type parameters on methods.
-func AddField[T, Builder, V any](
+func Internal__AddField[T, Builder, V any](
 	a *Internal__StructAdapter[T, Builder],
 	name string,
 	number int,

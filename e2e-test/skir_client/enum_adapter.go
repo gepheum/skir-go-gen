@@ -289,7 +289,7 @@ func (a *Internal__EnumAdapter[T]) AddConstantVariant(
 //
 // This is a package-level function (not a method) because Go does not permit
 // additional type parameters on methods.
-func AddWrapperVariant[T, V any](
+func Internal__AddWrapperVariant[T, V any](
 	a *Internal__EnumAdapter[T],
 	number int,
 	name string,
