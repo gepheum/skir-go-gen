@@ -478,6 +478,11 @@ class GoSourceFileGenerator {
     this.push("return e.kind\n");
     this.push("}\n\n");
 
+    // IsUnknown() method.
+    this.push(`func (e ${className}) IsUnknown() bool {\n`);
+    this.push(`return e.kind == ${kindType}_Unknown\n`);
+    this.push("}\n\n");
+
     // Is...() methods for constant variants.
     for (const variant of constantVariants) {
       const name = convertCase(variant.name.text, "UpperCamel");
@@ -485,11 +490,6 @@ class GoSourceFileGenerator {
       this.push(`return e.kind == ${kindType}_${name}Const\n`);
       this.push("}\n\n");
     }
-
-    // IsUnknown() method.
-    this.push(`func (e ${className}) IsUnknown() bool {\n`);
-    this.push(`return e.kind == ${kindType}_Unknown\n`);
-    this.push("}\n\n");
 
     // Is...() methods for wrapper variants.
     for (const variant of wrapperVariants) {
