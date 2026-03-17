@@ -1,8 +1,6 @@
 // Comments
 // Set...FromSlice With...FromSlice
 // ToString()
-// Methods
-// Constants
 // RPC code
 // Reflection
 // set up CI
@@ -144,6 +142,7 @@ class GoSourceFileGenerator {
     const className = getClassName(struct);
 
     // Define the frozen struct.
+    this.push(commentify([docToCommentText(struct.record.doc), "\nDeeply immutable."]));
     this.push(`type ${className} struct {\n`);
     for (const field of fields) {
       const fieldName = "_" + convertCase(field.name.text, "lowerCamel");
@@ -168,6 +167,7 @@ class GoSourceFileGenerator {
       const isStructType = this.isStructType(type);
       const fieldAccess = "s._" + convertCase(field.name.text, "lowerCamel");
       const returnType = isStructType ? `*${goType}` : goType;
+      this.push(commentify(docToCommentText(field.doc)));
       this.push(`func (s *${className}) ${fieldName}() ${returnType} {\n`);
       if (field.isRecursive === "hard") {
         // Stored as *GoType; return directly.
@@ -394,7 +394,7 @@ class GoSourceFileGenerator {
     );
     this.push(`${toGoStringLiteral(struct.modulePath)},\n`);
     this.push(`${toGoStringLiteral(qualifiedRecordName)},\n`);
-    this.push(`${toGoStringLiteral(struct.record.doc.text)},\n`);
+    this.push(`${toGoStringLiteral(docToCommentText(struct.record.doc))},\n`);
     this.push(
       `func(s *${className}) *skir_client.Internal__UnrecognizedFields { return s.__unrecognized },\n`,
     );
@@ -467,7 +467,8 @@ class GoSourceFileGenerator {
     }
     this.push(")\n\n");
 
-    // Define the frozen struct.
+    // Define the frozen enum struct.
+    this.push(commentify([docToCommentText(record.record.doc), "\nDeeply immutable."]));
     this.push(`type ${className} struct {\n`);
     this.push(`kind ${kindType}\n`);
     this.push("value any\n");
@@ -500,11 +501,13 @@ class GoSourceFileGenerator {
     }
 
     // Factory functions for constant variants.
+    this.push(`// ${className}_Unknown is the default value for fields of type ${className}.\n`);
     this.push(`func ${className}_Unknown() ${className} {\n`);
     this.push(`return ${className}{}\n`);
     this.push("}\n\n");
     for (const variant of constantVariants) {
       const name = convertCase(variant.name.text, "UpperCamel");
+      this.push(commentify(docToCommentText(variant.doc)));
       this.push(`func ${className}_${name}Const() ${className} {\n`);
       this.push(`return ${className}{kind: ${kindType}_${name}Const}\n`);
       this.push("}\n\n");
@@ -514,6 +517,7 @@ class GoSourceFileGenerator {
     for (const variant of wrapperVariants) {
       const name = convertCase(variant.name.text, "UpperCamel");
       const goType = typeSpeller.getGoType(variant.type!);
+      this.push(commentify(docToCommentText(variant.doc)));
       this.push(
         `func ${className}_${name}Wrapper(v ${goType}) ${className} {\n`,
       );
@@ -590,7 +594,7 @@ class GoSourceFileGenerator {
     this.push(`var _${className}_adapter = skir_client.NewEnumAdapter(\n`);
     this.push(`${toGoStringLiteral(record.modulePath)},\n`);
     this.push(`${toGoStringLiteral(qualifiedRecordName)},\n`);
-    this.push(`${toGoStringLiteral(record.record.doc.text)},\n`);
+    this.push(`${toGoStringLiteral(docToCommentText(record.record.doc))},\n`);
     this.push(`func(e ${className}) int { return int(e.kind) },\n`);
     this.push(`${kindCount},\n`);
     this.push(`${className}{},\n`);
@@ -667,6 +671,7 @@ class GoSourceFileGenerator {
     const responseSerializerExpr = typeSpeller.getSerializerExpression(
       method.responseType!,
     );
+    this.push(commentify(docToCommentText(method.doc)));
     this.push(
       `var ${convertCase(name, "UpperCamel")}_method = skir_client.Method[${requestGoType}, ${responseGoType}]{\n`,
     );
@@ -674,7 +679,7 @@ class GoSourceFileGenerator {
     this.push(`Number: ${method.number},\n`);
     this.push(`RequestSerializer: ${requestSerializerExpr},\n`);
     this.push(`ResponseSerializer: ${responseSerializerExpr},\n`);
-    this.push(`Doc: ${toGoStringLiteral(method.doc.text)},\n`);
+    this.push(`Doc: ${toGoStringLiteral(docToCommentText(method.doc))},\n`);
     this.push("}\n\n");
   }
 
@@ -689,6 +694,7 @@ class GoSourceFileGenerator {
     const goStringLiteral = toGoStringLiteral(
       JSON.stringify(constant.valueAsDenseJson),
     );
+    this.push(commentify(docToCommentText(constant.doc)));
     this.push(`var _${goName} *${goType} = nil\n\n`);
     this.push("func init() {\n");
     this.push(`  v, _ := ${serializerExpr}.FromJsonCode(${goStringLiteral})\n`);
@@ -912,17 +918,14 @@ function commentify(textOrLines: string | readonly string[]): string {
     typeof textOrLines === "string" ? textOrLines : textOrLines.join("\n")
   )
     .trim()
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/\*\//g, "* /");
+    .replace(/\n{3,}/g, "\n\n");
   if (text.length <= 0) {
     return "";
   }
-  const lines = text.split("\n");
-  if (lines.length === 1) {
-    return `/** ${text} */\n`;
-  } else {
-    return ["/**\n", ...lines.map((line) => ` * ${line}\n`), " */\n"].join("");
-  }
+  return text
+    .split("\n")
+    .map((line) => (line.length > 0 ? `// ${line}\n` : `//\n`))
+    .join("");
 }
 
 function docToCommentText(doc: Doc): string {
