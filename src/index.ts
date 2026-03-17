@@ -1,4 +1,3 @@
-// Add comments on getters returning a MaybeStar about whether the pointer can be nil or not
 // RPC code
 // Reflection
 // set up CI
@@ -178,7 +177,16 @@ class GoSourceFileGenerator {
       const isStructType = this.isStructType(type);
       const fieldAccess = "s._" + convertCase(field.name.text, "lowerCamel");
       const returnType = isStructType ? `*${goType}` : goType;
-      this.push(commentify(docToCommentText(field.doc)));
+      this.push(
+        commentify([
+          docToCommentText(field.doc),
+          isStructType
+            ? "The return value is never nil."
+            : type.kind === "optional"
+              ? "The return value may be nil."
+              : "",
+        ]),
+      );
       this.push(`func (s *${className}) ${fieldName}() ${returnType} {\n`);
       if (field.isRecursive === "hard") {
         // Stored as *GoType; return directly.
@@ -219,6 +227,12 @@ class GoSourceFileGenerator {
       const rawFieldAccess = "s._" + convertCase(field.name.text, "lowerCamel");
       const indexingAccess = `${rawFieldAccess}_indexed`;
       this.push(
+        commentify([
+          `Search${fieldName} returns a pointer to the element in the ${fieldName} array whose key equals k.`,
+          "Return nil if no such element exists.",
+        ]),
+      );
+      this.push(
         `func (s *${className}) Search${fieldName}(k ${exposedKeyType}) *${itemType} {\n`,
       );
       this.push(`indexingPtr := ${indexingAccess}\n`);
@@ -244,6 +258,12 @@ class GoSourceFileGenerator {
 
     // Write ToBuilder() method.
     this.push(
+      commentify([
+        `ToBuilder returns a new builder with all fields copied from this ${className}.`,
+        "Set the fields you want to change, then call Build() to get a modified copy.",
+      ]),
+    );
+    this.push(
       `func (s ${className}) ToBuilder() *${className}_partialBuilderType {\n`,
     );
     this.push(`  return &${className}_partialBuilderType{s: s}\n`);
@@ -256,13 +276,20 @@ class GoSourceFileGenerator {
         : className + "_builderDone";
     for (const [i, field] of fields.entries()) {
       const fieldName = convertCase(field.name.text, "UpperCamel");
-      const fieldType = typeSpeller.getGoType(field.type!);
+      const fieldType = field.type!;
+      const goType = typeSpeller.getGoType(fieldType);
       const nextField = fields[i + 1];
       this.push(`type ${fieldToBuilderName(field)} interface {\n`);
       const returnType = fieldToBuilderName(nextField);
-      this.push(`Set${fieldName}(v ${fieldType}) ${returnType}\n`);
-      if (field.type!.kind === "array") {
-        const itemType = typeSpeller.getGoType(field.type!.item);
+      this.push(
+        commentify([
+          docToCommentText(field.doc),
+          fieldType.kind === "optional" ? "You may pass nil." : "",
+        ]),
+      );
+      this.push(`Set${fieldName}(v ${goType}) ${returnType}\n`);
+      if (fieldType.kind === "array") {
+        const itemType = typeSpeller.getGoType(fieldType.item);
         this.push(`Set${fieldName}_fromSlice(v []${itemType}) ${returnType}\n`);
       }
       this.push("}\n\n");
@@ -280,11 +307,12 @@ class GoSourceFileGenerator {
     for (const [i, field] of fields.entries()) {
       const builderName = `_${className}_builder`;
       const fieldName = convertCase(field.name.text, "UpperCamel");
-      const fieldType = typeSpeller.getGoType(field.type!);
+      const fieldType = field.type!;
+      const goType = typeSpeller.getGoType(fieldType);
       const nextField = fields[i + 1];
       const returnType = fieldToBuilderName(nextField);
       this.push(
-        `func (b *${builderName}) Set${fieldName}(v ${fieldType}) ${returnType} {\n`,
+        `func (b *${builderName}) Set${fieldName}(v ${goType}) ${returnType} {\n`,
       );
       const fieldAccess = "b.s._" + convertCase(field.name.text, "lowerCamel");
       if (field.isRecursive === "hard") {
@@ -292,7 +320,7 @@ class GoSourceFileGenerator {
       } else {
         this.push(`  ${fieldAccess} = v\n`);
       }
-      const setterKeyedArrayHelper = this.getKeyedArrayHelper(field.type!);
+      const setterKeyedArrayHelper = this.getKeyedArrayHelper(fieldType);
       if (setterKeyedArrayHelper) {
         this.push(
           `  ${fieldAccess}_indexed = &atomic.Pointer[${setterKeyedArrayHelper.mapType}]{}\n`,
@@ -300,8 +328,8 @@ class GoSourceFileGenerator {
       }
       this.push("  return b\n");
       this.push("}\n\n");
-      if (field.type!.kind === "array") {
-        const itemType = typeSpeller.getGoType(field.type!.item);
+      if (fieldType.kind === "array") {
+        const itemType = typeSpeller.getGoType(fieldType.item);
         this.push(
           `func (b *${builderName}) Set${fieldName}_fromSlice(v []${itemType}) ${returnType} {\n`,
         );
@@ -319,6 +347,12 @@ class GoSourceFileGenerator {
 
     // Write the builder factory function.
     this.push(
+      commentify([
+        `${className}_builder returns a new builder for constructing ${className} values.`,
+        "All fields must be set in alphabetical order before calling Build().",
+      ]),
+    );
+    this.push(
       `func ${className}_builder() ${fieldToBuilderName(fields[0])} {\n`,
     );
     this.push(`  return &_${className}_builder{}\n`);
@@ -333,9 +367,16 @@ class GoSourceFileGenerator {
     for (const field of fields) {
       const builderTypeName = `${className}_partialBuilderType`;
       const fieldName = convertCase(field.name.text, "UpperCamel");
-      const fieldType = typeSpeller.getGoType(field.type!);
+      const fieldType = field.type!;
+      const goType = typeSpeller.getGoType(fieldType);
       this.push(
-        `func (b *${builderTypeName}) Set${fieldName}(v ${fieldType}) *${builderTypeName} {\n`,
+        commentify([
+          docToCommentText(field.doc),
+          fieldType.kind === "optional" ? "You may pass nil." : "",
+        ]),
+      );
+      this.push(
+        `func (b *${builderTypeName}) Set${fieldName}(v ${goType}) *${builderTypeName} {\n`,
       );
       const fieldAccess = "b.s._" + convertCase(field.name.text, "lowerCamel");
       if (field.isRecursive === "hard") {
@@ -343,9 +384,7 @@ class GoSourceFileGenerator {
       } else {
         this.push(`  ${fieldAccess} = v\n`);
       }
-      const partialSetterKeyedArrayHelper = this.getKeyedArrayHelper(
-        field.type!,
-      );
+      const partialSetterKeyedArrayHelper = this.getKeyedArrayHelper(fieldType);
       if (partialSetterKeyedArrayHelper) {
         this.push(
           `  ${fieldAccess}_indexed = &atomic.Pointer[${partialSetterKeyedArrayHelper.mapType}]{}\n`,
@@ -353,8 +392,8 @@ class GoSourceFileGenerator {
       }
       this.push("  return b\n");
       this.push("}\n\n");
-      if (field.type!.kind === "array") {
-        const itemType = typeSpeller.getGoType(field.type!.item);
+      if (fieldType.kind === "array") {
+        const itemType = typeSpeller.getGoType(fieldType.item);
         this.push(
           `func (b *${builderTypeName}) Set${fieldName}_fromSlice(v []${itemType}) *${builderTypeName} {\n`,
         );
@@ -373,6 +412,12 @@ class GoSourceFileGenerator {
     this.push("}\n\n");
 
     // Write the partial builder factory function.
+    this.push(
+      commentify([
+        `${className}_partialBuilder returns a new builder for constructing ${className} values.`,
+        "All fields pre-initialized to their default values. Fields can be set in any order.",
+      ]),
+    );
     this.push(
       `func ${className}_partialBuilder() *${className}_partialBuilderType {\n`,
     );
@@ -395,6 +440,12 @@ class GoSourceFileGenerator {
       }
     }
     this.push("}\n\n");
+    this.push(
+      commentify([
+        `${className}_default returns a pointer to the default ${className}.`,
+        "All fields set to their default values.",
+      ]),
+    );
     this.push(`func ${className}_default() *${className} {\n`);
     this.push(`  return &_${className}_default\n`);
     this.push("}\n\n");
@@ -423,6 +474,11 @@ class GoSourceFileGenerator {
     this.push(")\n\n");
 
     // Serializer function.
+    this.push(
+      commentify(
+        `${className}_serializer returns the serializer for ${className} values.`,
+      ),
+    );
     this.push(
       `func ${className}_serializer() skir_client.Serializer[${className}] {\n`,
     );
@@ -498,11 +554,19 @@ class GoSourceFileGenerator {
     this.push("}\n\n");
 
     // Kind() getter.
+    this.push(
+      commentify(`Kind returns which variant this ${className} holds.`),
+    );
     this.push(`func (e ${className}) Kind() ${kindType} {\n`);
     this.push("return e.kind\n");
     this.push("}\n\n");
 
     // IsUnknown() method.
+    this.push(
+      commentify(
+        `IsUnknown returns true if this ${className} holds the unknown variant.`,
+      ),
+    );
     this.push(`func (e ${className}) IsUnknown() bool {\n`);
     this.push(`return e.kind == ${kindType}_Unknown\n`);
     this.push("}\n\n");
@@ -510,6 +574,12 @@ class GoSourceFileGenerator {
     // Is...() methods for constant variants.
     for (const variant of constantVariants) {
       const name = convertCase(variant.name.text, "UpperCamel");
+      this.push(
+        commentify([
+          `Is${name}Const returns true if this ${className} holds the '${variant.name.text}' constant variant.`,
+          docToCommentText(variant.doc),
+        ]),
+      );
       this.push(`func (e ${className}) Is${name}Const() bool {\n`);
       this.push(`return e.kind == ${kindType}_${name}Const\n`);
       this.push("}\n\n");
@@ -518,6 +588,12 @@ class GoSourceFileGenerator {
     // Is...() methods for wrapper variants.
     for (const variant of wrapperVariants) {
       const name = convertCase(variant.name.text, "UpperCamel");
+      this.push(
+        commentify([
+          `Is${name}Wrapper returns true if this ${className} holds the '${variant.name.text}' wrapper variant.`,
+          docToCommentText(variant.doc),
+        ]),
+      );
       this.push(`func (e ${className}) Is${name}Wrapper() bool {\n`);
       this.push(`return e.kind == ${kindType}_${name}Wrapper\n`);
       this.push("}\n\n");
@@ -525,7 +601,10 @@ class GoSourceFileGenerator {
 
     // Factory functions for constant variants.
     this.push(
-      `// ${className}_Unknown is the default value for fields of type ${className}.\n`,
+      commentify([
+        `${className}_Unknown creates an instance holding the unknown variant.`,
+        `It is the default value for fields of type ${className}.`,
+      ]),
     );
     this.push(`func ${className}_Unknown() ${className} {\n`);
     this.push(`return ${className}{}\n`);
@@ -540,9 +619,15 @@ class GoSourceFileGenerator {
 
     // Factory functions for wrapper variants.
     for (const variant of wrapperVariants) {
-      const name = convertCase(variant.name.text, "UpperCamel");
+      const variantName = variant.name.text;
+      const name = convertCase(variantName, "UpperCamel");
       const goType = typeSpeller.getGoType(variant.type!);
-      this.push(commentify(docToCommentText(variant.doc)));
+      this.push(
+        commentify([
+          `${className}_${name}Wrapper creates a '${variantName}' variant wrapping the given value.`,
+          docToCommentText(variant.doc),
+        ]),
+      );
       this.push(
         `func ${className}_${name}Wrapper(v ${goType}) ${className} {\n`,
       );
@@ -554,22 +639,23 @@ class GoSourceFileGenerator {
 
     // Unwrap...() methods for wrapper variants.
     for (const variant of wrapperVariants) {
-      const name = convertCase(variant.name.text, "UpperCamel");
+      const variantName = variant.name.text;
+      const name = convertCase(variantName, "UpperCamel");
       const type = variant.type!;
       const goType = typeSpeller.getGoType(type);
       const isStructType = this.isStructType(type);
       const returnType = isStructType ? `*${goType}` : goType;
-      if (isStructType) {
-        this.push(
-          `// Unwrap${name} returns the value wrapped in this ${className}.\n// The return value is never nil.\n`,
-        );
-      } else if (type.kind === "optional") {
-        this.push(
-          `// Unwrap${name} returns the value wrapped in this ${className}.\n// The return value may be nil.\n`,
-        );
-      } else {
-        this.push(`// Unwrap${name} returns the value wrapped in this ${className}.\n`);
-      }
+      this.push(
+        commentify([
+          `Unwrap${name} returns the '${variantName}' value wrapped in this ${className}.`,
+          `Assumes that Is${name}() is true. Panics otherwise.`,
+          isStructType
+            ? "The return value is never nil."
+            : type.kind === "optional"
+              ? "The return value may be nil."
+              : "",
+        ]),
+      );
       this.push(`func (e ${className}) Unwrap${name}() ${returnType} {\n`);
       this.push(`if e.kind != ${kindType}_${name}Wrapper {\n`);
       this.push(
@@ -588,6 +674,12 @@ class GoSourceFileGenerator {
     // Visitor interface.
     // Note: Go does not allow type parameters on methods, so Accept is a
     // package-level generic function rather than a method on the enum.
+    this.push(
+      commentify([
+        `${className}_visitor is implemented by types that handle all variants of ${className}.`,
+        "Pass an implementation to ${className}_accept.",
+      ]),
+    );
     this.push(`type ${className}_visitor[T any] interface {\n`);
     this.push("OnUnknown() T\n");
     for (const variant of constantVariants) {
@@ -604,6 +696,11 @@ class GoSourceFileGenerator {
     this.push("}\n\n");
 
     // Accept function.
+    this.push(
+      commentify(
+        `${className}_accept calls the appropriate method on v corresponding to the variant held by e.`,
+      ),
+    );
     this.push(
       `func ${className}_accept[T any](e ${className}, v ${className}_visitor[T]) T {\n`,
     );
@@ -658,6 +755,11 @@ class GoSourceFileGenerator {
     this.push(")\n\n");
 
     // Serializer function.
+    this.push(
+      commentify(
+        `${className}_serializer returns the serializer for ${className} values.`,
+      ),
+    );
     this.push(
       `func ${className}_serializer() skir_client.Serializer[${className}] {\n`,
     );
