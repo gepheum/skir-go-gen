@@ -408,9 +408,13 @@ func (d *EnumDescriptor) GetVariantByNumber(number int) EnumVariant {
 // JSON serialization
 // ─────────────────────────────────────────────────────────────────────────────
 
-// typeDescriptorToJson serialises td to a compact JSON string:
+// typeDescriptorToJson serialises td to a self-describing JSON string with
+// 2-space indentation:
 //
-//	{"type":<type-signature>,"records":[<record-definition>,...] }
+//	{
+//	  "type": <type-signature>,
+//	  "records": [<record-definition>, ...]
+//	}
 func typeDescriptorToJson(td TypeDescriptor) string {
 	var out strings.Builder
 
@@ -433,42 +437,7 @@ func typeDescriptorToJson(td TypeDescriptor) string {
 			}
 			recordIdToJson[rid] = "" // mark as in-progress to break cycles
 			var sb strings.Builder
-			sb.WriteString(`{"kind":"struct","id":`)
-			writeJsonEscapedString(rid, &sb)
-			if v.Doc != "" {
-				sb.WriteString(`,"doc":`)
-				writeJsonEscapedString(v.Doc, &sb)
-			}
-			sb.WriteString(`,"fields":[`)
-			for i, f := range v.Fields {
-				if i > 0 {
-					sb.WriteByte(',')
-				}
-				sb.WriteString(`{"name":`)
-				writeJsonEscapedString(f.Name, &sb)
-				sb.WriteString(`,"number":`)
-				sb.WriteString(strconv.Itoa(f.Number))
-				sb.WriteString(`,"type":`)
-				typeSignatureToJson(f.Type, &sb)
-				if f.Doc != "" {
-					sb.WriteString(`,"doc":`)
-					writeJsonEscapedString(f.Doc, &sb)
-				}
-				sb.WriteByte('}')
-			}
-			sb.WriteByte(']')
-			removedSlice := removedNumbersToSortedSlice(v.RemovedNumbers)
-			if len(removedSlice) > 0 {
-				sb.WriteString(`,"removed_numbers":[`)
-				for i, n := range removedSlice {
-					if i > 0 {
-						sb.WriteByte(',')
-					}
-					sb.WriteString(strconv.Itoa(n))
-				}
-				sb.WriteByte(']')
-			}
-			sb.WriteByte('}')
+			writeStructRecordJson(v, "    ", &sb)
 			recordIdToJson[rid] = sb.String()
 			order = append(order, rid)
 			for _, f := range v.Fields {
@@ -481,44 +450,7 @@ func typeDescriptorToJson(td TypeDescriptor) string {
 			}
 			recordIdToJson[rid] = "" // mark as in-progress to break cycles
 			var sb strings.Builder
-			sb.WriteString(`{"kind":"enum","id":`)
-			writeJsonEscapedString(rid, &sb)
-			if v.Doc != "" {
-				sb.WriteString(`,"doc":`)
-				writeJsonEscapedString(v.Doc, &sb)
-			}
-			sb.WriteString(`,"variants":[`)
-			for i, variant := range v.Variants {
-				if i > 0 {
-					sb.WriteByte(',')
-				}
-				sb.WriteString(`{"name":`)
-				writeJsonEscapedString(variant.GetName(), &sb)
-				sb.WriteString(`,"number":`)
-				sb.WriteString(strconv.Itoa(variant.GetNumber()))
-				if w, ok := variant.(*EnumWrapperVariant); ok {
-					sb.WriteString(`,"type":`)
-					typeSignatureToJson(w.Type, &sb)
-				}
-				if variant.GetDoc() != "" {
-					sb.WriteString(`,"doc":`)
-					writeJsonEscapedString(variant.GetDoc(), &sb)
-				}
-				sb.WriteByte('}')
-			}
-			sb.WriteByte(']')
-			removedSlice := removedNumbersToSortedSlice(v.RemovedNumbers)
-			if len(removedSlice) > 0 {
-				sb.WriteString(`,"removed_numbers":[`)
-				for i, n := range removedSlice {
-					if i > 0 {
-						sb.WriteByte(',')
-					}
-					sb.WriteString(strconv.Itoa(n))
-				}
-				sb.WriteByte(']')
-			}
-			sb.WriteByte('}')
+			writeEnumRecordJson(v, "    ", &sb)
 			recordIdToJson[rid] = sb.String()
 			order = append(order, rid)
 			for _, variant := range v.Variants {
@@ -531,47 +463,206 @@ func typeDescriptorToJson(td TypeDescriptor) string {
 
 	addRecordDefinitions(td)
 
-	out.WriteString(`{"type":`)
-	typeSignatureToJson(td, &out)
-	out.WriteString(`,"records":[`)
+	out.WriteString("{\n  \"type\": ")
+	typeSignatureToJson(td, "  ", &out)
+	out.WriteString(",\n  \"records\": [")
 	for i, id := range order {
 		if i > 0 {
 			out.WriteByte(',')
 		}
+		out.WriteString("\n    ")
 		out.WriteString(recordIdToJson[id])
 	}
-	out.WriteString(`]}`)
+	if len(order) > 0 {
+		out.WriteString("\n  ")
+	}
+	out.WriteString("]\n}")
 	return out.String()
 }
 
-// typeSignatureToJson writes the compact "type signature" JSON for td to out.
-// This is the value stored under the "type" key of fields and of the root document.
-func typeSignatureToJson(td TypeDescriptor, out *strings.Builder) {
+// writeStructRecordJson writes a pretty-printed JSON object for a struct record
+// definition to out. indent is the indentation level of the closing `}`.
+func writeStructRecordJson(v *StructDescriptor, indent string, out *strings.Builder) {
+	inner := indent + "  "
+	fieldIndent := inner + "  "
+	fieldBody := fieldIndent + "  "
+	out.WriteString("{\n")
+	out.WriteString(inner + "\"kind\": \"struct\",\n")
+	out.WriteString(inner + "\"id\": ")
+	writeJsonEscapedString(v.recordId(), out)
+	if v.Doc != "" {
+		out.WriteString(",\n")
+		out.WriteString(inner + "\"doc\": ")
+		writeJsonEscapedString(v.Doc, out)
+	}
+	out.WriteString(",\n")
+	out.WriteString(inner + "\"fields\": [")
+	for i, f := range v.Fields {
+		if i > 0 {
+			out.WriteByte(',')
+		}
+		out.WriteString("\n")
+		out.WriteString(fieldIndent + "{\n")
+		out.WriteString(fieldBody + "\"name\": ")
+		writeJsonEscapedString(f.Name, out)
+		out.WriteString(",\n")
+		out.WriteString(fieldBody + "\"number\": ")
+		out.WriteString(strconv.Itoa(f.Number))
+		out.WriteString(",\n")
+		out.WriteString(fieldBody + "\"type\": ")
+		typeSignatureToJson(f.Type, fieldBody, out)
+		if f.Doc != "" {
+			out.WriteString(",\n")
+			out.WriteString(fieldBody + "\"doc\": ")
+			writeJsonEscapedString(f.Doc, out)
+		}
+		out.WriteString("\n")
+		out.WriteString(fieldIndent + "}")
+	}
+	if len(v.Fields) > 0 {
+		out.WriteString("\n")
+		out.WriteString(inner)
+	}
+	out.WriteString("]")
+	removedSlice := removedNumbersToSortedSlice(v.RemovedNumbers)
+	if len(removedSlice) > 0 {
+		out.WriteString(",\n")
+		out.WriteString(inner + "\"removed_numbers\": [")
+		for i, n := range removedSlice {
+			if i > 0 {
+				out.WriteByte(',')
+			}
+			out.WriteString("\n")
+			out.WriteString(fieldIndent)
+			out.WriteString(strconv.Itoa(n))
+		}
+		out.WriteString("\n")
+		out.WriteString(inner + "]")
+	}
+	out.WriteString("\n")
+	out.WriteString(indent + "}")
+}
+
+// writeEnumRecordJson writes a pretty-printed JSON object for an enum record
+// definition to out. indent is the indentation level of the closing `}`.
+// Variants are emitted sorted by number for deterministic output.
+func writeEnumRecordJson(v *EnumDescriptor, indent string, out *strings.Builder) {
+	inner := indent + "  "
+	variantIndent := inner + "  "
+	variantBody := variantIndent + "  "
+	out.WriteString("{\n")
+	out.WriteString(inner + "\"kind\": \"enum\",\n")
+	out.WriteString(inner + "\"id\": ")
+	writeJsonEscapedString(v.recordId(), out)
+	if v.Doc != "" {
+		out.WriteString(",\n")
+		out.WriteString(inner + "\"doc\": ")
+		writeJsonEscapedString(v.Doc, out)
+	}
+	out.WriteString(",\n")
+	out.WriteString(inner + "\"variants\": [")
+	sorted := make([]EnumVariant, len(v.Variants))
+	copy(sorted, v.Variants)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].GetNumber() < sorted[j].GetNumber()
+	})
+	for i, variant := range sorted {
+		if i > 0 {
+			out.WriteByte(',')
+		}
+		out.WriteString("\n")
+		out.WriteString(variantIndent + "{\n")
+		out.WriteString(variantBody + "\"name\": ")
+		writeJsonEscapedString(variant.GetName(), out)
+		out.WriteString(",\n")
+		out.WriteString(variantBody + "\"number\": ")
+		out.WriteString(strconv.Itoa(variant.GetNumber()))
+		if w, ok := variant.(*EnumWrapperVariant); ok {
+			out.WriteString(",\n")
+			out.WriteString(variantBody + "\"type\": ")
+			typeSignatureToJson(w.Type, variantBody, out)
+		}
+		if variant.GetDoc() != "" {
+			out.WriteString(",\n")
+			out.WriteString(variantBody + "\"doc\": ")
+			writeJsonEscapedString(variant.GetDoc(), out)
+		}
+		out.WriteString("\n")
+		out.WriteString(variantIndent + "}")
+	}
+	if len(sorted) > 0 {
+		out.WriteString("\n")
+		out.WriteString(inner)
+	}
+	out.WriteString("]")
+	removedSlice := removedNumbersToSortedSlice(v.RemovedNumbers)
+	if len(removedSlice) > 0 {
+		out.WriteString(",\n")
+		out.WriteString(inner + "\"removed_numbers\": [")
+		for i, n := range removedSlice {
+			if i > 0 {
+				out.WriteByte(',')
+			}
+			out.WriteString("\n")
+			out.WriteString(variantIndent)
+			out.WriteString(strconv.Itoa(n))
+		}
+		out.WriteString("\n")
+		out.WriteString(inner + "]")
+	}
+	out.WriteString("\n")
+	out.WriteString(indent + "}")
+}
+
+// typeSignatureToJson writes a pretty-printed JSON type-signature value for td
+// to out. indent is the indentation of the enclosing context: `{` is written
+// first (on the current line), the closing `}` is at the indent level.
+func typeSignatureToJson(td TypeDescriptor, indent string, out *strings.Builder) {
+	inner := indent + "  "
 	switch v := td.(type) {
 	case *PrimitiveDescriptor:
-		out.WriteString(`{"kind":"primitive","value":"`)
+		out.WriteString("{\n")
+		out.WriteString(inner + "\"kind\": \"primitive\",\n")
+		out.WriteString(inner + "\"value\": \"")
 		out.WriteString(v.PrimitiveType.String())
-		out.WriteString(`"}`)
+		out.WriteString("\"\n")
+		out.WriteString(indent + "}")
 	case *OptionalDescriptor:
-		out.WriteString(`{"kind":"optional","value":`)
-		typeSignatureToJson(v.OtherType, out)
-		out.WriteByte('}')
+		out.WriteString("{\n")
+		out.WriteString(inner + "\"kind\": \"optional\",\n")
+		out.WriteString(inner + "\"value\": ")
+		typeSignatureToJson(v.OtherType, inner, out)
+		out.WriteString("\n")
+		out.WriteString(indent + "}")
 	case *ArrayDescriptor:
-		out.WriteString(`{"kind":"array","value":{"item":`)
-		typeSignatureToJson(v.ItemType, out)
+		valueIndent := inner + "  "
+		out.WriteString("{\n")
+		out.WriteString(inner + "\"kind\": \"array\",\n")
+		out.WriteString(inner + "\"value\": {\n")
+		out.WriteString(valueIndent + "\"item\": ")
+		typeSignatureToJson(v.ItemType, valueIndent, out)
 		if v.KeyExtractor != "" {
-			out.WriteString(`,"key_extractor":`)
+			out.WriteString(",\n")
+			out.WriteString(valueIndent + "\"key_extractor\": ")
 			writeJsonEscapedString(v.KeyExtractor, out)
 		}
-		out.WriteString(`}}`)
+		out.WriteString("\n")
+		out.WriteString(inner + "}\n")
+		out.WriteString(indent + "}")
 	case *StructDescriptor:
-		out.WriteString(`{"kind":"record","value":`)
+		out.WriteString("{\n")
+		out.WriteString(inner + "\"kind\": \"record\",\n")
+		out.WriteString(inner + "\"value\": ")
 		writeJsonEscapedString(v.recordId(), out)
-		out.WriteByte('}')
+		out.WriteString("\n")
+		out.WriteString(indent + "}")
 	case *EnumDescriptor:
-		out.WriteString(`{"kind":"record","value":`)
+		out.WriteString("{\n")
+		out.WriteString(inner + "\"kind\": \"record\",\n")
+		out.WriteString(inner + "\"value\": ")
 		writeJsonEscapedString(v.recordId(), out)
-		out.WriteByte('}')
+		out.WriteString("\n")
+		out.WriteString(indent + "}")
 	default:
 		panic(fmt.Sprintf("skir_client: typeSignatureToJson: unknown TypeDescriptor %T", td))
 	}

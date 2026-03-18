@@ -98,9 +98,9 @@ func (a *boolAdapter) isDefault(v *bool) bool { return !*v }
 
 func (a *boolAdapter) toJson(input *bool, _ *string, out *strings.Builder) {
 	if *input {
-		out.WriteByte('1')
+		out.WriteString("true")
 	} else {
-		out.WriteByte('0')
+		out.WriteString("false")
 	}
 }
 

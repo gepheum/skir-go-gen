@@ -31,11 +31,11 @@ func mustFromBytes[T any](t *testing.T, s Serializer[T], b []byte) T {
 
 func TestBoolSerializer_ToJson(t *testing.T) {
 	s := BoolSerializer()
-	if got := s.ToJson(true); got != "1" {
-		t.Errorf("ToJson(true) = %q, want %q", got, "1")
+	if got := s.ToJson(true); got != "true" {
+		t.Errorf("ToJson(true) = %q, want %q", got, "true")
 	}
-	if got := s.ToJson(false); got != "0" {
-		t.Errorf("ToJson(false) = %q, want %q", got, "0")
+	if got := s.ToJson(false); got != "false" {
+		t.Errorf("ToJson(false) = %q, want %q", got, "false")
 	}
 }
 
@@ -167,16 +167,13 @@ func TestBoolSerializer_TypeDescriptor(t *testing.T) {
 // BoolSerializer – Readable{} flavor
 // ─────────────────────────────────────────────────────────────────────────────
 
-// boolAdapter ignores the readable flag, so ToJson with Readable{} still
-// produces "1"/"0" (just routed through json.Indent, which is a no-op for
-// single-token values).
 func TestBoolSerializer_ToJson_readableFlavor(t *testing.T) {
 	s := BoolSerializer()
-	if got := s.ToJson(true, Readable{}); got != "1" {
-		t.Errorf("ToJson(true, Readable{}) = %q, want %q", got, "1")
+	if got := s.ToJson(true, Readable{}); got != "true" {
+		t.Errorf("ToJson(true, Readable{}) = %q, want %q", got, "true")
 	}
-	if got := s.ToJson(false, Readable{}); got != "0" {
-		t.Errorf("ToJson(false, Readable{}) = %q, want %q", got, "0")
+	if got := s.ToJson(false, Readable{}); got != "false" {
+		t.Errorf("ToJson(false, Readable{}) = %q, want %q", got, "false")
 	}
 }
 
