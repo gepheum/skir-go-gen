@@ -503,6 +503,7 @@ class GoSourceFileGenerator {
           `${toGoStringLiteral(field.name.text)},\n` +
           `${field.number},\n` +
           `${serializerExpr},\n` +
+          `${toGoStringLiteral(docToCommentText(field.doc))},\n` +
           `func(s *${className}) ${storedGoType} { return s.${fieldName} },\n` +
           `func(b *${className}_partialBuilderType, v ${storedGoType}) { b.s.${fieldName} = v },\n` +
           ")\n",
@@ -778,6 +779,7 @@ class GoSourceFileGenerator {
           `${variant.number},\n` +
           `${toGoStringLiteral(variant.name.text)},\n` +
           `int(${kindType}_${name}Const),\n` +
+          `${toGoStringLiteral(docToCommentText(variant.doc))},\n` +
           `${className}_${name}Const(),\n` +
           ")\n",
       );
@@ -797,6 +799,7 @@ class GoSourceFileGenerator {
           `${toGoStringLiteral(variant.name.text)},\n` +
           `int(${kindType}_${name}Wrapper),\n` +
           `${serializerExpr},\n` +
+          `${toGoStringLiteral(docToCommentText(variant.doc))},\n` +
           `func(v ${goType}) ${className} { return ${className}_${name}Wrapper(v) },\n` +
           `${getValueExpr},\n` +
           ")\n",

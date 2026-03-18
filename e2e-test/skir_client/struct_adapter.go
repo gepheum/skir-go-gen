@@ -16,6 +16,7 @@ import (
 type internalFieldEntry[T, Builder any] interface {
 	entryName() string
 	entryNumber() int
+	entryDoc() string
 	entryType() TypeDescriptor
 	isEntryDefault(frozen *T) bool
 	entryToJson(frozen *T, eolIndent *string, out *strings.Builder)
@@ -27,6 +28,7 @@ type internalFieldEntry[T, Builder any] interface {
 type typedField[T, Builder, V any] struct {
 	name    string
 	number  int
+	doc     string
 	adapter typeAdapter[V]
 	getter  func(*T) V
 	setter  func(Builder, V)
@@ -34,6 +36,7 @@ type typedField[T, Builder, V any] struct {
 
 func (f *typedField[T, Builder, V]) entryName() string         { return f.name }
 func (f *typedField[T, Builder, V]) entryNumber() int          { return f.number }
+func (f *typedField[T, Builder, V]) entryDoc() string          { return f.doc }
 func (f *typedField[T, Builder, V]) entryType() TypeDescriptor { return f.adapter.typeDescriptor() }
 
 func (f *typedField[T, Builder, V]) isEntryDefault(frozen *T) bool {
@@ -139,6 +142,7 @@ func Internal__AddField[T, Builder, V any](
 	name string,
 	number int,
 	ser Serializer[V],
+	doc string,
 	getter func(*T) V,
 	setter func(Builder, V),
 ) {
@@ -148,6 +152,7 @@ func Internal__AddField[T, Builder, V any](
 	f := &typedField[T, Builder, V]{
 		name:    name,
 		number:  number,
+		doc:     doc,
 		adapter: ser.adapter,
 		getter:  getter,
 		setter:  setter,
@@ -199,6 +204,7 @@ func (a *Internal__StructAdapter[T, Builder]) Finalize() {
 			Name:   e.entryName(),
 			Number: e.entryNumber(),
 			Type:   e.entryType(),
+			Doc:    e.entryDoc(),
 		}
 	}
 	a.desc.Fields = fields

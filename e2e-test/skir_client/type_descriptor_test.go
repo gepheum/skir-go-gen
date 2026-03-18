@@ -650,6 +650,7 @@ func TestTypeDescriptor_RecursiveStruct_AsJson(t *testing.T) {
 	Internal__AddField(
 		adapter, "self", 0,
 		OptionalSerializer(adapter.Serializer()),
+		"",
 		func(s *recStruct) *recStruct { return s.self },
 		func(b *recBuilder, v *recStruct) { b.s.self = v },
 	)
@@ -701,6 +702,7 @@ func TestTypeDescriptor_RecursiveEnum_AsJson(t *testing.T) {
 	Internal__AddWrapperVariant(
 		adapter, 1, "e", kindE,
 		adapter.Serializer(),
+		"",
 		func(v recEnum) recEnum { return recEnum{kind: kindE, value: v} },
 		func(e recEnum) recEnum {
 			if v, ok := e.value.(recEnum); ok {

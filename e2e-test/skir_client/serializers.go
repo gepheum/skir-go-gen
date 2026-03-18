@@ -96,11 +96,19 @@ type boolAdapter struct{}
 
 func (a *boolAdapter) isDefault(v *bool) bool { return !*v }
 
-func (a *boolAdapter) toJson(input *bool, _ *string, out *strings.Builder) {
-	if *input {
-		out.WriteString("true")
+func (a *boolAdapter) toJson(input *bool, eolIndent *string, out *strings.Builder) {
+	if eolIndent != nil {
+		if *input {
+			out.WriteString("true")
+		} else {
+			out.WriteString("false")
+		}
 	} else {
-		out.WriteString("false")
+		if *input {
+			out.WriteByte('1')
+		} else {
+			out.WriteByte('0')
+		}
 	}
 }
 

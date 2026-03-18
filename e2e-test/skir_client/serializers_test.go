@@ -31,11 +31,11 @@ func mustFromBytes[T any](t *testing.T, s Serializer[T], b []byte) T {
 
 func TestBoolSerializer_ToJson(t *testing.T) {
 	s := BoolSerializer()
-	if got := s.ToJson(true); got != "true" {
-		t.Errorf("ToJson(true) = %q, want %q", got, "true")
+	if got := s.ToJson(true); got != "1" {
+		t.Errorf("ToJson(true) = %q, want %q", got, "1")
 	}
-	if got := s.ToJson(false); got != "false" {
-		t.Errorf("ToJson(false) = %q, want %q", got, "false")
+	if got := s.ToJson(false); got != "0" {
+		t.Errorf("ToJson(false) = %q, want %q", got, "0")
 	}
 }
 
@@ -177,13 +177,13 @@ func TestBoolSerializer_ToJson_readableFlavor(t *testing.T) {
 	}
 }
 
-func TestBoolSerializer_ToJson_readableFlavorMatchesDense(t *testing.T) {
+func TestBoolSerializer_ToJson_denseAndReadableDiffer(t *testing.T) {
 	s := BoolSerializer()
 	for _, v := range []bool{true, false} {
 		dense := s.ToJson(v)
 		readable := s.ToJson(v, Readable{})
-		if dense != readable {
-			t.Errorf("bool %v: dense=%q readable=%q, expected equal", v, dense, readable)
+		if dense == readable {
+			t.Errorf("bool %v: dense=%q readable=%q, expected different", v, dense, readable)
 		}
 	}
 }

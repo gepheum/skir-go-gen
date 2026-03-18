@@ -277,6 +277,7 @@ func (a *Internal__EnumAdapter[T]) AddConstantVariant(
 	number int,
 	name string,
 	kindOrdinal int,
+	doc string,
 	instance T,
 ) {
 	if a.finalized {
@@ -286,7 +287,7 @@ func (a *Internal__EnumAdapter[T]) AddConstantVariant(
 	a.numberToEntry[number] = e
 	a.nameToVariantEntry[name] = e
 	a.kindOrdinalToEntry[kindOrdinal] = e
-	a.descVariants = append(a.descVariants, &EnumConstantVariant{Name: name, Number: number})
+	a.descVariants = append(a.descVariants, &EnumConstantVariant{Name: name, Number: number, Doc: doc})
 }
 
 // AddWrapperVariant registers a wrapper variant on an in-progress
@@ -300,6 +301,7 @@ func Internal__AddWrapperVariant[T, V any](
 	name string,
 	kindOrdinal int,
 	ser Serializer[V],
+	doc string,
 	wrap func(V) T,
 	getValue func(T) V,
 ) {
@@ -321,6 +323,7 @@ func Internal__AddWrapperVariant[T, V any](
 		Name:   name,
 		Number: number,
 		Type:   ser.adapter.typeDescriptor(),
+		Doc:    doc,
 	})
 }
 
