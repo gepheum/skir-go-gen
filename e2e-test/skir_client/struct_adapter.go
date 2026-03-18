@@ -108,7 +108,7 @@ func Internal__NewStructAdapter[T, Builder any](
 	getUnrecognizedFields func(*T) *Internal__UnrecognizedFields,
 	setUnrecognizedFields func(Builder, *Internal__UnrecognizedFields),
 ) *Internal__StructAdapter[T, Builder] {
-	return &Internal__StructAdapter[T, Builder]{
+	a := &Internal__StructAdapter[T, Builder]{
 		defaultInstance:       defaultInstance,
 		newMutable:            newMutable,
 		toFrozen:              toFrozen,
@@ -121,6 +121,12 @@ func Internal__NewStructAdapter[T, Builder any](
 		removedNumbers:        make(map[int]struct{}),
 		maxNumber:             -1,
 	}
+	// Initialize the descriptor immediately so typeDescriptor() returns a valid
+	// non-nil pointer even before Finalize is called. This lets recursive fields
+	// (e.g. Optional[ThisStruct]) capture the live pointer; Fields is populated
+	// by Finalize once all entries are registered.
+	a.desc = newStructDescriptor(modulePath, qualifiedName, doc, a.removedNumbers, nil)
+	return a
 }
 
 // AddField registers a struct field on an in-progress Internal__StructAdapter.
@@ -186,6 +192,7 @@ func (a *Internal__StructAdapter[T, Builder]) Finalize() {
 		a.slotToEntry[e.entryNumber()] = e
 	}
 
+	// Populate Fields on the descriptor pre-allocated in Internal__NewStructAdapter.
 	fields := make([]*StructField, len(a.orderedEntries))
 	for i, e := range a.orderedEntries {
 		fields[i] = &StructField{
@@ -194,13 +201,7 @@ func (a *Internal__StructAdapter[T, Builder]) Finalize() {
 			Type:   e.entryType(),
 		}
 	}
-	a.desc = newStructDescriptor(
-		a.modulePath,
-		a.qualifiedName,
-		a.docString,
-		a.removedNumbers,
-		fields,
-	)
+	a.desc.Fields = fields
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

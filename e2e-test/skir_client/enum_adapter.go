@@ -249,7 +249,7 @@ func NewEnumAdapter[T any](
 	wrapUnrecognized func(*Internal__UnrecognizedVariant) T,
 	getUnrecognized func(T) *Internal__UnrecognizedVariant,
 ) *Internal__EnumAdapter[T] {
-	return &Internal__EnumAdapter[T]{
+	a := &Internal__EnumAdapter[T]{
 		modulePath:     modulePath,
 		qualifiedName:  qualifiedName,
 		docString:      doc,
@@ -264,6 +264,11 @@ func NewEnumAdapter[T any](
 		kindOrdinalToEntry: make([]enumVariantEntry[T], kindCount),
 		removedNumbers:     make(map[int]struct{}),
 	}
+	// Initialize the descriptor immediately so typeDescriptor() returns a valid
+	// non-nil pointer even before Finalize is called. This lets recursive wrapper
+	// variants capture the live pointer; Variants is populated by Finalize.
+	a.desc = newEnumDescriptor(modulePath, qualifiedName, doc, a.removedNumbers, nil)
+	return a
 }
 
 // AddConstantVariant registers a constant (non-wrapping) variant.
@@ -340,14 +345,9 @@ func (a *Internal__EnumAdapter[T]) Finalize() {
 	a.numberToEntry[0] = a.unknownEntry
 	a.nameToVariantEntry["UNKNOWN"] = a.unknownEntry
 	a.kindOrdinalToEntry[0] = a.unknownEntry
-	// Build the descriptor (UNKNOWN is excluded from the descriptor variants).
-	a.desc = newEnumDescriptor(
-		a.modulePath,
-		a.qualifiedName,
-		a.docString,
-		a.removedNumbers,
-		a.descVariants,
-	)
+	// Populate Variants on the descriptor pre-allocated in NewEnumAdapter
+	// (UNKNOWN is excluded from the descriptor variants).
+	a.desc.Variants = a.descVariants
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

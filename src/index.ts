@@ -1,5 +1,6 @@
 // RPC code
 // Reflection
+// Golden tests
 // set up CI
 
 import {
@@ -150,7 +151,7 @@ class GoSourceFileGenerator {
 
     // Define the frozen struct.
     this.push(
-      commentify([docToCommentText(struct.record.doc), "\nDeeply immutable."]),
+      commentify([docToCommentText(struct.record.doc), "Deeply immutable."]),
     );
     this.push(`type ${className} struct {\n`);
     for (const field of fields) {
@@ -545,7 +546,7 @@ class GoSourceFileGenerator {
 
     // Define the frozen enum struct.
     this.push(
-      commentify([docToCommentText(record.record.doc), "\nDeeply immutable."]),
+      commentify([docToCommentText(record.record.doc), "Deeply immutable."]),
     );
     this.push(`type ${className} struct {\n`);
     this.push(`kind ${kindType}\n`);
@@ -649,9 +650,9 @@ class GoSourceFileGenerator {
           `Unwrap${name} returns the '${variantName}' value wrapped in this ${className}.`,
           `Assumes that Is${name}() is true. Panics otherwise.`,
           isStructType
-            ? "The return value is never nil."
+            ? "\nThe return value is never nil."
             : type.kind === "optional"
-              ? "The return value may be nil."
+              ? "\nThe return value may be nil."
               : "",
         ]),
       );

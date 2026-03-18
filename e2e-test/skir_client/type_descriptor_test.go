@@ -3,6 +3,7 @@ package skir_client
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -612,5 +613,108 @@ func TestTypeDescriptor_SpecialCharsInDoc_RoundTrip(t *testing.T) {
 	sd := got.(*StructDescriptor)
 	if sd.GetDoc() != doc {
 		t.Errorf("Doc = %q, want %q", sd.GetDoc(), doc)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Recursive type descriptors
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestTypeDescriptor_RecursiveStruct_AsJson reproduces the nil-pointer panic
+// that occurs when a struct contains an optional field of its own type and the
+// caller invokes AsJson() on the resulting serializer's type descriptor.
+//
+// The bug: OptionalSerializer eagerly calls inner.TypeDescriptor() at
+// construction time, before the struct adapter's Finalize() has run and set
+// its own descriptor.  This stores a typed-nil *StructDescriptor inside the
+// OptionalDescriptor, which later panics in typeSignatureToJson.
+func TestTypeDescriptor_RecursiveStruct_AsJson(t *testing.T) {
+	type recStruct struct {
+		self *recStruct
+	}
+	type recBuilder struct {
+		s recStruct
+	}
+
+	adapter := Internal__NewStructAdapter(
+		recStruct{},
+		func() *recBuilder { return &recBuilder{} },
+		func(b *recBuilder) recStruct { return b.s },
+		"test", "RecStruct", "",
+		func(s *recStruct) *Internal__UnrecognizedFields { return nil },
+		func(b *recBuilder, u *Internal__UnrecognizedFields) {},
+	)
+	// The self-referential field: Optional<RecStruct>.
+	// Before the fix, OptionalSerializer calls adapter.Serializer().TypeDescriptor()
+	// right here, which returns a nil *StructDescriptor (Finalize not called yet).
+	Internal__AddField(
+		adapter, "self", 0,
+		OptionalSerializer(adapter.Serializer()),
+		func(s *recStruct) *recStruct { return s.self },
+		func(b *recBuilder, v *recStruct) { b.s.self = v },
+	)
+	adapter.Finalize()
+
+	// Must not panic.
+	got := adapter.Serializer().TypeDescriptor().AsJson()
+	// Sanity-check: the JSON must reference the record id "test:RecStruct".
+	if !strings.Contains(got, "test:RecStruct") {
+		t.Errorf("AsJson() = %q, expected it to contain %q", got, "test:RecStruct")
+	}
+}
+
+// TestTypeDescriptor_RecursiveEnum_AsJson reproduces the same nil-pointer panic
+// for a self-referential enum  (e.g.  enum RecEnum { e: RecEnum; }).
+//
+// The bug: Internal__AddWrapperVariant eagerly calls ser.adapter.typeDescriptor()
+// before Finalize, storing a typed-nil *EnumDescriptor in the variant, which
+// later panics in typeSignatureToJson.
+func TestTypeDescriptor_RecursiveEnum_AsJson(t *testing.T) {
+	type recEnum struct {
+		kind  int
+		value any
+	}
+
+	const (
+		kindUnknown = 0
+		kindE       = 1
+	)
+
+	unknown := recEnum{}
+
+	adapter := NewEnumAdapter[recEnum](
+		"test", "RecEnum", "",
+		func(e recEnum) int { return e.kind },
+		2, // kindCount: Unknown + E
+		unknown,
+		func(u *Internal__UnrecognizedVariant) recEnum { return recEnum{kind: kindUnknown, value: u} },
+		func(e recEnum) *Internal__UnrecognizedVariant {
+			if v, ok := e.value.(*Internal__UnrecognizedVariant); ok {
+				return v
+			}
+			return nil
+		},
+	)
+	// The self-referential wrapper variant.
+	// Before the fix, Internal__AddWrapperVariant eagerly calls
+	// adapter.Serializer().TypeDescriptor(), which returns a nil *EnumDescriptor.
+	Internal__AddWrapperVariant(
+		adapter, 1, "e", kindE,
+		adapter.Serializer(),
+		func(v recEnum) recEnum { return recEnum{kind: kindE, value: v} },
+		func(e recEnum) recEnum {
+			if v, ok := e.value.(recEnum); ok {
+				return v
+			}
+			return unknown
+		},
+	)
+	adapter.Finalize()
+
+	// Must not panic.
+	got := adapter.Serializer().TypeDescriptor().AsJson()
+	// Sanity-check: the JSON must reference the record id "test:RecEnum".
+	if !strings.Contains(got, "test:RecEnum") {
+		t.Errorf("AsJson() = %q, expected it to contain %q", got, "test:RecEnum")
 	}
 }
