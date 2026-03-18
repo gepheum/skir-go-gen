@@ -118,9 +118,12 @@ func (a *boolAdapter) fromJson(json fastjson.Value, _ bool) (bool, error) {
 		return true, nil
 	case fastjson.TypeFalse:
 		return false, nil
-	default:
+	case fastjson.TypeNumber:
 		v, err := json.Int()
 		return v != 0, err
+	default:
+		sb, err := json.StringBytes()
+		return string(sb) != "0", err
 	}
 }
 
