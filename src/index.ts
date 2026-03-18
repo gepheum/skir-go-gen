@@ -621,11 +621,13 @@ class GoSourceFileGenerator {
     for (const variant of wrapperVariants) {
       const variantName = variant.name.text;
       const name = convertCase(variantName, "UpperCamel");
-      const goType = typeSpeller.getGoType(variant.type!);
+      const variantType = variant.type!;
+      const goType = typeSpeller.getGoType(variantType);
       this.push(
         commentify([
           `${className}_${name}Wrapper creates a '${variantName}' variant wrapping the given value.`,
           docToCommentText(variant.doc),
+          variantType.kind === "optional" ? "You may pass nil." : "",
         ]),
       );
       this.push(
