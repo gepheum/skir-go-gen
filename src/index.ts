@@ -1,9 +1,10 @@
 // 'You may pass nil' -> 'The parameter may be nil`
+// fooWrapper -> wrapFoo
 // Generate public symbols first, then internal...
 // Take a pass at all the code...
 // RPC code
 // Reflection
-// Rm the weird getters in TypeDescriptor
+// Generate doc
 // Golden tests
 // set up CI
 
@@ -294,7 +295,7 @@ class GoSourceFileGenerator {
       this.push(`Set${fieldName}(v ${goType}) ${returnType}\n`);
       if (fieldType.kind === "array") {
         const itemType = typeSpeller.getGoType(fieldType.item);
-        this.push(`Set${fieldName}_fromSlice(v []${itemType}) ${returnType}\n`);
+        this.push(`Set${fieldName}_FromSlice(v []${itemType}) ${returnType}\n`);
       }
       this.push("}\n\n");
     }
@@ -335,7 +336,7 @@ class GoSourceFileGenerator {
       if (fieldType.kind === "array") {
         const itemType = typeSpeller.getGoType(fieldType.item);
         this.push(
-          `func (b *${builderName}) Set${fieldName}_fromSlice(v []${itemType}) ${returnType} {\n`,
+          `func (b *${builderName}) Set${fieldName}_FromSlice(v []${itemType}) ${returnType} {\n`,
         );
         this.push(
           `  return b.Set${fieldName}(skir_client.ArrayFromSlice(v))\n`,
@@ -399,7 +400,7 @@ class GoSourceFileGenerator {
       if (fieldType.kind === "array") {
         const itemType = typeSpeller.getGoType(fieldType.item);
         this.push(
-          `func (b *${builderTypeName}) Set${fieldName}_fromSlice(v []${itemType}) *${builderTypeName} {\n`,
+          `func (b *${builderTypeName}) Set${fieldName}_FromSlice(v []${itemType}) *${builderTypeName} {\n`,
         );
         this.push(
           `  return b.Set${fieldName}(skir_client.ArrayFromSlice(v))\n`,
