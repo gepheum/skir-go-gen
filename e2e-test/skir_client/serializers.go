@@ -79,13 +79,17 @@ func BytesSerializer() Serializer[Bytes]   { return newSerializer(&bytesAdapter{
 // ArraySerializer wraps an existing item Serializer to produce a
 // Serializer[Array[E]].
 func ArraySerializer[E any](item Serializer[E]) Serializer[Array[E]] {
-	return newSerializer(NewArrayAdapter(item.adapter))
+	return Internal__ArraySerializer(item, "")
 }
 
 // OptionalSerializer wraps an existing Serializer to produce a
 // Serializer[*E], where nil represents the absent value.
 func OptionalSerializer[E any](other Serializer[E]) Serializer[*E] {
 	return newSerializer(NewOptionalAdapter(other.adapter))
+}
+
+func Internal__ArraySerializer[E any](item Serializer[E], keyExtractor string) Serializer[Array[E]] {
+	return newSerializer(NewArrayAdapter(item.adapter, keyExtractor))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,8 +123,11 @@ func (a *boolAdapter) fromJson(json fastjson.Value, _ bool) (bool, error) {
 	case fastjson.TypeFalse:
 		return false, nil
 	case fastjson.TypeNumber:
-		v, err := json.Int()
-		return v != 0, err
+		if n, err := json.Int(); err == nil {
+			return n != 0, nil
+		}
+		f, err := json.Float64()
+		return f != 0, err
 	default:
 		sb, err := json.StringBytes()
 		return string(sb) != "0", err
@@ -203,6 +210,9 @@ func (a *int32Adapter) toJson(input *int32, _ *string, out *strings.Builder) {
 func (a *int32Adapter) fromJson(json fastjson.Value, _ bool) (int32, error) {
 	switch json.Type() {
 	case fastjson.TypeNumber:
+		if n, err := json.Int(); err == nil {
+			return int32(n), nil
+		}
 		f, err := json.Float64()
 		if err != nil {
 			return 0, err
@@ -285,6 +295,9 @@ func (a *int64Adapter) toJson(input *int64, _ *string, out *strings.Builder) {
 func (a *int64Adapter) fromJson(json fastjson.Value, _ bool) (int64, error) {
 	switch json.Type() {
 	case fastjson.TypeNumber:
+		if n, err := json.Int64(); err == nil {
+			return n, nil
+		}
 		f, err := json.Float64()
 		if err != nil {
 			return 0, err
@@ -363,6 +376,9 @@ func (a *hash64Adapter) toJson(input *uint64, _ *string, out *strings.Builder) {
 func (a *hash64Adapter) fromJson(json fastjson.Value, _ bool) (uint64, error) {
 	switch json.Type() {
 	case fastjson.TypeNumber:
+		if n, err := json.Uint64(); err == nil {
+			return n, nil
+		}
 		f, err := json.Float64()
 		if err != nil {
 			return 0, err
@@ -862,11 +878,12 @@ type arrayAdapter[E any] struct {
 
 // NewArrayAdapter returns a typeAdapter[Array[E]] that delegates
 // element serialization to item.
-func NewArrayAdapter[E any](item typeAdapter[E]) *arrayAdapter[E] {
+func NewArrayAdapter[E any](item typeAdapter[E], keyExtractor string) *arrayAdapter[E] {
 	return &arrayAdapter[E]{
 		item: item,
 		desc: &ArrayDescriptor{
-			ItemType: item.typeDescriptor(),
+			ItemType:     item.typeDescriptor(),
+			KeyExtractor: keyExtractor,
 		},
 	}
 }

@@ -1,5 +1,7 @@
 // Figure out the pointer conversion: shouldn't ToJson(...) etc. expect a pointer?
 // 'You may pass nil' -> 'The parameter may be nil`
+// Generate public symbols first, then internal...
+// Take a pass at all the code...
 // RPC code
 // Reflection
 // Rm the weird getters in TypeDescriptor
@@ -496,7 +498,20 @@ class GoSourceFileGenerator {
       const type = field.type!;
       const goType = typeSpeller.getGoType(type);
       const serializerExpr = typeSpeller.getSerializerExpression(type);
-      const maybeAmp = field.isRecursive === "hard" ? "" : "&";
+      let getterBody: string;
+      if (field.isRecursive === "hard") {
+        getterBody = [
+          "",
+          `if v := s.${fieldName}; v != nil {`,
+          "  return v",
+          "} else {",
+          `  return &_${goType}_default`,
+          "}",
+          "",
+        ].join("\n");
+      } else {
+        getterBody = ` return &s.${fieldName} `;
+      }
       this.push(
         `skir_client.Internal__AddField(\n` +
           `_${className}_adapter,\n` +
@@ -504,7 +519,7 @@ class GoSourceFileGenerator {
           `${field.number},\n` +
           `${serializerExpr},\n` +
           `${toGoStringLiteral(docToCommentText(field.doc))},\n` +
-          `func(s *${className}) *${goType} { return ${maybeAmp}s.${fieldName} },\n` +
+          `func(s *${className}) *${goType} {${getterBody}},\n` +
           `func(b *${className}_partialBuilderType, v ${goType}) { b.${setterName}(v) },\n` +
           ")\n",
       );
@@ -651,7 +666,6 @@ class GoSourceFileGenerator {
     // Is...() methods for wrapper variants.
     for (const variant of wrapperVariants) {
       const variantName = variant.name.text;
-      const lowerName = convertCase(variantName, "lowerCamel");
       const upperName = convertCase(variantName, "UpperCamel");
       this.push(
         commentify([
@@ -710,7 +724,6 @@ class GoSourceFileGenerator {
     for (const variant of wrapperVariants) {
       const variantName = variant.name.text;
       const upperName = convertCase(variantName, "UpperCamel");
-      const lowerName = convertCase(variantName, "lowerCamel");
       const type = variant.type!;
       const goType = typeSpeller.getGoType(type);
       const isStructType = this.isStructType(type);
@@ -782,8 +795,6 @@ class GoSourceFileGenerator {
       this.push(`return v.On${upperName}Const()\n`);
     }
     for (const variant of wrapperVariants) {
-      const variantName = variant.name.text;
-      const lowerName = convertCase(variantName, "lowerCamel");
       const upperName = convertCase(variant.name.text, "UpperCamel");
       this.push(`case ${kindType}_${upperName}Wrapper:\n`);
       this.push(`return v.On${upperName}Wrapper(e.Unwrap${upperName}())\n`);

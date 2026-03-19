@@ -83,11 +83,24 @@ export class TypeSpeller {
         throw TypeError();
       }
       case "array": {
-        return (
-          "skir_client.ArraySerializer(\n" +
-          this.getSerializerExpression(type.item) +
-          ",\n)"
-        );
+        if (type.key) {
+          const keyExtractor = type.key.path
+            .map((part) => part.name.text)
+            .join(".");
+          return (
+            "skir_client.Internal__ArraySerializer(\n" +
+            this.getSerializerExpression(type.item) +
+            ",\n" +
+            JSON.stringify(keyExtractor) +
+            ",\n)"
+          );
+        } else {
+          return (
+            "skir_client.ArraySerializer(\n" +
+            this.getSerializerExpression(type.item) +
+            ",\n)"
+          );
+        }
       }
       case "optional": {
         return (
