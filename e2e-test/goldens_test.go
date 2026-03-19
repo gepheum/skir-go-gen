@@ -45,15 +45,15 @@ func newTypedValueResult[T any](v T, s skir_client.Serializer[T]) typedValueResu
 
 func evaluateStringExpression(expr goldens.StringExpression) (string, error) {
 	switch expr.Kind() {
-	case goldens.StringExpression_kind_LiteralWrapper:
+	case goldens.StringExpression_kind_literalWrapper:
 		return expr.UnwrapLiteral(), nil
-	case goldens.StringExpression_kind_ToDenseJsonWrapper:
+	case goldens.StringExpression_kind_toDenseJsonWrapper:
 		res, err := evaluateTypedValue(expr.UnwrapToDenseJson())
 		if err != nil {
 			return "", err
 		}
 		return res.toDenseJson(), nil
-	case goldens.StringExpression_kind_ToReadableJsonWrapper:
+	case goldens.StringExpression_kind_toReadableJsonWrapper:
 		res, err := evaluateTypedValue(expr.UnwrapToReadableJson())
 		if err != nil {
 			return "", err
@@ -66,9 +66,9 @@ func evaluateStringExpression(expr goldens.StringExpression) (string, error) {
 
 func evaluateBytesExpression(expr goldens.BytesExpression) (skir_client.Bytes, error) {
 	switch expr.Kind() {
-	case goldens.BytesExpression_kind_LiteralWrapper:
+	case goldens.BytesExpression_kind_literalWrapper:
 		return expr.UnwrapLiteral(), nil
-	case goldens.BytesExpression_kind_ToBytesWrapper:
+	case goldens.BytesExpression_kind_toBytesWrapper:
 		res, err := evaluateTypedValue(expr.UnwrapToBytes())
 		if err != nil {
 			return skir_client.Bytes{}, err
@@ -105,129 +105,129 @@ func parseFromBytes[T any](s skir_client.Serializer[T], expr goldens.BytesExpres
 
 func evaluateTypedValue(tv goldens.TypedValue) (typedValueResult, error) {
 	switch tv.Kind() {
-	case goldens.TypedValue_kind_BoolWrapper:
+	case goldens.TypedValue_kind_boolWrapper:
 		return newTypedValueResult(tv.UnwrapBool(), skir_client.BoolSerializer()), nil
-	case goldens.TypedValue_kind_Int32Wrapper:
+	case goldens.TypedValue_kind_int32Wrapper:
 		return newTypedValueResult(tv.UnwrapInt32(), skir_client.Int32Serializer()), nil
-	case goldens.TypedValue_kind_Int64Wrapper:
+	case goldens.TypedValue_kind_int64Wrapper:
 		return newTypedValueResult(tv.UnwrapInt64(), skir_client.Int64Serializer()), nil
-	case goldens.TypedValue_kind_Hash64Wrapper:
+	case goldens.TypedValue_kind_hash64Wrapper:
 		return newTypedValueResult(tv.UnwrapHash64(), skir_client.Hash64Serializer()), nil
-	case goldens.TypedValue_kind_Float32Wrapper:
+	case goldens.TypedValue_kind_float32Wrapper:
 		return newTypedValueResult(tv.UnwrapFloat32(), skir_client.Float32Serializer()), nil
-	case goldens.TypedValue_kind_Float64Wrapper:
+	case goldens.TypedValue_kind_float64Wrapper:
 		return newTypedValueResult(tv.UnwrapFloat64(), skir_client.Float64Serializer()), nil
-	case goldens.TypedValue_kind_TimestampWrapper:
+	case goldens.TypedValue_kind_timestampWrapper:
 		return newTypedValueResult(tv.UnwrapTimestamp(), skir_client.TimestampSerializer()), nil
-	case goldens.TypedValue_kind_StringWrapper:
+	case goldens.TypedValue_kind_stringWrapper:
 		return newTypedValueResult(tv.UnwrapString(), skir_client.StringSerializer()), nil
-	case goldens.TypedValue_kind_BytesWrapper:
+	case goldens.TypedValue_kind_bytesWrapper:
 		return newTypedValueResult(tv.UnwrapBytes(), skir_client.BytesSerializer()), nil
-	case goldens.TypedValue_kind_BoolOptionalWrapper:
+	case goldens.TypedValue_kind_boolOptionalWrapper:
 		return newTypedValueResult(tv.UnwrapBoolOptional(), skir_client.OptionalSerializer(skir_client.BoolSerializer())), nil
-	case goldens.TypedValue_kind_IntsWrapper:
+	case goldens.TypedValue_kind_intsWrapper:
 		return newTypedValueResult(tv.UnwrapInts(), skir_client.ArraySerializer(skir_client.Int32Serializer())), nil
-	case goldens.TypedValue_kind_PointWrapper:
+	case goldens.TypedValue_kind_pointWrapper:
 		return newTypedValueResult(*tv.UnwrapPoint(), goldens.Point_serializer()), nil
-	case goldens.TypedValue_kind_ColorWrapper:
+	case goldens.TypedValue_kind_colorWrapper:
 		return newTypedValueResult(*tv.UnwrapColor(), goldens.Color_serializer()), nil
-	case goldens.TypedValue_kind_MyEnumWrapper:
+	case goldens.TypedValue_kind_myEnumWrapper:
 		return newTypedValueResult(tv.UnwrapMyEnum(), goldens.MyEnum_serializer()), nil
-	case goldens.TypedValue_kind_KeyedArraysWrapper:
+	case goldens.TypedValue_kind_keyedArraysWrapper:
 		return newTypedValueResult(*tv.UnwrapKeyedArrays(), goldens.KeyedArrays_serializer()), nil
-	case goldens.TypedValue_kind_RecStructWrapper:
+	case goldens.TypedValue_kind_recStructWrapper:
 		return newTypedValueResult(*tv.UnwrapRecStruct(), goldens.RecStruct_serializer()), nil
-	case goldens.TypedValue_kind_RecEnumWrapper:
+	case goldens.TypedValue_kind_recEnumWrapper:
 		return newTypedValueResult(tv.UnwrapRecEnum(), goldens.RecEnum_serializer()), nil
 
-	case goldens.TypedValue_kind_PointFromJsonDropUnrecognizedWrapper:
+	case goldens.TypedValue_kind_pointFromJsonDropUnrecognizedWrapper:
 		v, err := parseFromJson(goldens.Point_serializer(), tv.UnwrapPointFromJsonDropUnrecognized(), false)
 		if err != nil {
 			return typedValueResult{}, err
 		}
 		return newTypedValueResult(v, goldens.Point_serializer()), nil
-	case goldens.TypedValue_kind_PointFromJsonKeepUnrecognizedWrapper:
+	case goldens.TypedValue_kind_pointFromJsonKeepUnrecognizedWrapper:
 		v, err := parseFromJson(goldens.Point_serializer(), tv.UnwrapPointFromJsonKeepUnrecognized(), true)
 		if err != nil {
 			return typedValueResult{}, err
 		}
 		return newTypedValueResult(v, goldens.Point_serializer()), nil
-	case goldens.TypedValue_kind_PointFromBytesDropUnrecognizedWrapper:
+	case goldens.TypedValue_kind_pointFromBytesDropUnrecognizedWrapper:
 		v, err := parseFromBytes(goldens.Point_serializer(), tv.UnwrapPointFromBytesDropUnrecognized(), false)
 		if err != nil {
 			return typedValueResult{}, err
 		}
 		return newTypedValueResult(v, goldens.Point_serializer()), nil
-	case goldens.TypedValue_kind_PointFromBytesKeepUnrecognizedWrapper:
+	case goldens.TypedValue_kind_pointFromBytesKeepUnrecognizedWrapper:
 		v, err := parseFromBytes(goldens.Point_serializer(), tv.UnwrapPointFromBytesKeepUnrecognized(), true)
 		if err != nil {
 			return typedValueResult{}, err
 		}
 		return newTypedValueResult(v, goldens.Point_serializer()), nil
 
-	case goldens.TypedValue_kind_ColorFromJsonDropUnrecognizedWrapper:
+	case goldens.TypedValue_kind_colorFromJsonDropUnrecognizedWrapper:
 		v, err := parseFromJson(goldens.Color_serializer(), tv.UnwrapColorFromJsonDropUnrecognized(), false)
 		if err != nil {
 			return typedValueResult{}, err
 		}
 		return newTypedValueResult(v, goldens.Color_serializer()), nil
-	case goldens.TypedValue_kind_ColorFromJsonKeepUnrecognizedWrapper:
+	case goldens.TypedValue_kind_colorFromJsonKeepUnrecognizedWrapper:
 		v, err := parseFromJson(goldens.Color_serializer(), tv.UnwrapColorFromJsonKeepUnrecognized(), true)
 		if err != nil {
 			return typedValueResult{}, err
 		}
 		return newTypedValueResult(v, goldens.Color_serializer()), nil
-	case goldens.TypedValue_kind_ColorFromBytesDropUnrecognizedWrapper:
+	case goldens.TypedValue_kind_colorFromBytesDropUnrecognizedWrapper:
 		v, err := parseFromBytes(goldens.Color_serializer(), tv.UnwrapColorFromBytesDropUnrecognized(), false)
 		if err != nil {
 			return typedValueResult{}, err
 		}
 		return newTypedValueResult(v, goldens.Color_serializer()), nil
-	case goldens.TypedValue_kind_ColorFromBytesKeepUnrecognizedWrapper:
+	case goldens.TypedValue_kind_colorFromBytesKeepUnrecognizedWrapper:
 		v, err := parseFromBytes(goldens.Color_serializer(), tv.UnwrapColorFromBytesKeepUnrecognized(), true)
 		if err != nil {
 			return typedValueResult{}, err
 		}
 		return newTypedValueResult(v, goldens.Color_serializer()), nil
 
-	case goldens.TypedValue_kind_MyEnumFromJsonDropUnrecognizedWrapper:
+	case goldens.TypedValue_kind_myEnumFromJsonDropUnrecognizedWrapper:
 		v, err := parseFromJson(goldens.MyEnum_serializer(), tv.UnwrapMyEnumFromJsonDropUnrecognized(), false)
 		if err != nil {
 			return typedValueResult{}, err
 		}
 		return newTypedValueResult(v, goldens.MyEnum_serializer()), nil
-	case goldens.TypedValue_kind_MyEnumFromJsonKeepUnrecognizedWrapper:
+	case goldens.TypedValue_kind_myEnumFromJsonKeepUnrecognizedWrapper:
 		v, err := parseFromJson(goldens.MyEnum_serializer(), tv.UnwrapMyEnumFromJsonKeepUnrecognized(), true)
 		if err != nil {
 			return typedValueResult{}, err
 		}
 		return newTypedValueResult(v, goldens.MyEnum_serializer()), nil
-	case goldens.TypedValue_kind_MyEnumFromBytesDropUnrecognizedWrapper:
+	case goldens.TypedValue_kind_myEnumFromBytesDropUnrecognizedWrapper:
 		v, err := parseFromBytes(goldens.MyEnum_serializer(), tv.UnwrapMyEnumFromBytesDropUnrecognized(), false)
 		if err != nil {
 			return typedValueResult{}, err
 		}
 		return newTypedValueResult(v, goldens.MyEnum_serializer()), nil
-	case goldens.TypedValue_kind_MyEnumFromBytesKeepUnrecognizedWrapper:
+	case goldens.TypedValue_kind_myEnumFromBytesKeepUnrecognizedWrapper:
 		v, err := parseFromBytes(goldens.MyEnum_serializer(), tv.UnwrapMyEnumFromBytesKeepUnrecognized(), true)
 		if err != nil {
 			return typedValueResult{}, err
 		}
 		return newTypedValueResult(v, goldens.MyEnum_serializer()), nil
 
-	case goldens.TypedValue_kind_RoundTripDenseJsonWrapper:
+	case goldens.TypedValue_kind_roundTripDenseJsonWrapper:
 		inner, err := evaluateTypedValue(tv.UnwrapRoundTripDenseJson())
 		if err != nil {
 			return typedValueResult{}, err
 		}
 		return inner.reDecodeFromDenseJson(inner.toDenseJson())
-	case goldens.TypedValue_kind_RoundTripReadableJsonWrapper:
+	case goldens.TypedValue_kind_roundTripReadableJsonWrapper:
 		inner, err := evaluateTypedValue(tv.UnwrapRoundTripReadableJson())
 		if err != nil {
 			return typedValueResult{}, err
 		}
 		return inner.reDecodeFromDenseJson(inner.toReadableJson())
-	case goldens.TypedValue_kind_RoundTripBytesWrapper:
+	case goldens.TypedValue_kind_roundTripBytesWrapper:
 		inner, err := evaluateTypedValue(tv.UnwrapRoundTripBytes())
 		if err != nil {
 			return typedValueResult{}, err
@@ -404,7 +404,7 @@ func reserializeLargeArrayAndVerify(t *testing.T, input *goldens.Assertion_Reser
 func verifyAssertion(t *testing.T, assertion goldens.Assertion) {
 	t.Helper()
 	switch assertion.Kind() {
-	case goldens.Assertion_kind_StringEqualWrapper:
+	case goldens.Assertion_kind_stringEqualWrapper:
 		input := assertion.UnwrapStringEqual()
 		actual, err := evaluateStringExpression(input.Actual())
 		if err != nil {
@@ -418,7 +418,7 @@ func verifyAssertion(t *testing.T, assertion goldens.Assertion) {
 			t.Errorf("string not equal:\n  got:      %q\n  expected: %q", actual, expected)
 		}
 
-	case goldens.Assertion_kind_StringInWrapper:
+	case goldens.Assertion_kind_stringInWrapper:
 		input := assertion.UnwrapStringIn()
 		actual, err := evaluateStringExpression(input.Actual())
 		if err != nil {
@@ -435,7 +435,7 @@ func verifyAssertion(t *testing.T, assertion goldens.Assertion) {
 			t.Errorf("string not in expected set:\n  got:      %q\n  expected: %v", actual, input.Expected().ToSlice())
 		}
 
-	case goldens.Assertion_kind_BytesEqualWrapper:
+	case goldens.Assertion_kind_bytesEqualWrapper:
 		input := assertion.UnwrapBytesEqual()
 		actual, err := evaluateBytesExpression(input.Actual())
 		if err != nil {
@@ -449,7 +449,7 @@ func verifyAssertion(t *testing.T, assertion goldens.Assertion) {
 			t.Errorf("bytes not equal:\n  got:      hex:%s\n  expected: hex:%s", actual.Hex(), expected.Hex())
 		}
 
-	case goldens.Assertion_kind_BytesInWrapper:
+	case goldens.Assertion_kind_bytesInWrapper:
 		input := assertion.UnwrapBytesIn()
 		actual, err := evaluateBytesExpression(input.Actual())
 		if err != nil {
@@ -470,13 +470,13 @@ func verifyAssertion(t *testing.T, assertion goldens.Assertion) {
 			t.Errorf("bytes not in expected set:\n  got:      hex:%s\n  expected: %v", actual.Hex(), expHexes)
 		}
 
-	case goldens.Assertion_kind_ReserializeValueWrapper:
+	case goldens.Assertion_kind_reserializeValueWrapper:
 		reserializeValueAndVerify(t, assertion.UnwrapReserializeValue())
 
-	case goldens.Assertion_kind_ReserializeLargeStringWrapper:
+	case goldens.Assertion_kind_reserializeLargeStringWrapper:
 		reserializeLargeStringAndVerify(t, assertion.UnwrapReserializeLargeString())
 
-	case goldens.Assertion_kind_ReserializeLargeArrayWrapper:
+	case goldens.Assertion_kind_reserializeLargeArrayWrapper:
 		reserializeLargeArrayAndVerify(t, assertion.UnwrapReserializeLargeArray())
 
 	default:

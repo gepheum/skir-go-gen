@@ -555,8 +555,8 @@ class GoSourceFileGenerator {
       this.push(`${kindType}_${lowerName}Const\n`);
     }
     for (const variant of wrapperVariants) {
-      const upperName = convertCase(variant.name.text, "UpperCamel");
-      this.push(`${kindType}_${upperName}Wrapper\n`);
+      const lowerName = convertCase(variant.name.text, "lowerCamel");
+      this.push(`${kindType}_${lowerName}Wrapper\n`);
     }
     this.push(")\n\n");
 
@@ -665,6 +665,7 @@ class GoSourceFileGenerator {
     // Is...() methods for wrapper variants.
     for (const variant of wrapperVariants) {
       const variantName = variant.name.text;
+      const lowerName = convertCase(variantName, "lowerCamel");
       const upperName = convertCase(variantName, "UpperCamel");
       this.push(
         commentify([
@@ -673,7 +674,7 @@ class GoSourceFileGenerator {
         ]),
       );
       this.push(`func (e ${className}) Is${upperName}Wrapper() bool {\n`);
-      this.push(`return e.kind == ${kindType}_${upperName}Wrapper\n`);
+      this.push(`return e.kind == ${kindType}_${lowerName}Wrapper\n`);
       this.push("}\n\n");
     }
 
@@ -709,12 +710,11 @@ class GoSourceFileGenerator {
         ]),
       );
       const implName = `_${className}_value_${lowerName}Wrapper`;
-      const upperName = convertCase(variantName, "UpperCamel");
       this.push(
         `func ${className}_${lowerName}Wrapper(v ${goType}) ${className} {\n`,
       );
       this.push(
-        `return ${className}{kind: ${kindType}_${upperName}Wrapper, value: &${implName}{v: v}}\n`,
+        `return ${className}{kind: ${kindType}_${lowerName}Wrapper, value: &${implName}{v: v}}\n`,
       );
       this.push("}\n\n");
     }
@@ -722,6 +722,7 @@ class GoSourceFileGenerator {
     // Unwrap...() methods for wrapper variants.
     for (const variant of wrapperVariants) {
       const variantName = variant.name.text;
+      const lowerName = convertCase(variantName, "lowerCamel");
       const upperName = convertCase(variantName, "UpperCamel");
       const type = variant.type!;
       const goType = typeSpeller.getGoType(type);
@@ -739,7 +740,7 @@ class GoSourceFileGenerator {
         ]),
       );
       this.push(`func (e ${className}) Unwrap${upperName}() ${returnType} {\n`);
-      this.push(`if e.kind != ${kindType}_${upperName}Wrapper {\n`);
+      this.push(`if e.kind != ${kindType}_${lowerName}Wrapper {\n`);
       this.push(
         `panic("${className}.Unwrap${upperName}(): kind is not ${upperName}Wrapper")\n`,
       );
@@ -794,8 +795,10 @@ class GoSourceFileGenerator {
       this.push(`return v.On${upperName}Const()\n`);
     }
     for (const variant of wrapperVariants) {
-      const upperName = convertCase(variant.name.text, "UpperCamel");
-      this.push(`case ${kindType}_${upperName}Wrapper:\n`);
+      const variantName = variant.name.text;
+      const lowerName = convertCase(variantName, "lowerCamel");
+      const upperName = convertCase(variantName, "UpperCamel");
+      this.push(`case ${kindType}_${lowerName}Wrapper:\n`);
       this.push(`return v.On${upperName}Wrapper(e.Unwrap${upperName}())\n`);
     }
     this.push("default:\n");
@@ -879,7 +882,7 @@ class GoSourceFileGenerator {
           `_${className}_adapter,\n` +
           `${variant.number},\n` +
           `${toGoStringLiteral(variant.name.text)},\n` +
-          `int(${kindType}_${upperName}Wrapper),\n` +
+          `int(${kindType}_${lowerName}Wrapper),\n` +
           `${serializerExpr},\n` +
           `${toGoStringLiteral(docToCommentText(variant.doc))},\n` +
           `func(v ${goType}) ${className} { return ${className}_${lowerName}Wrapper(v) },\n` +
