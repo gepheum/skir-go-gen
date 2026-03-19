@@ -81,7 +81,7 @@ func (f *typedField[T, Builder, V]) decodeEntry(mutable Builder, in *binaryInput
 // Usage: call NewStructAdapter, then AddField / AddRemovedNumber for each
 // field, then Finalize before using the adapter.
 type Internal__StructAdapter[T any, Builder any] struct {
-	defaultInstance       T
+	defaultInstance       *T
 	newMutable            func() Builder
 	toFrozen              func(Builder) T
 	modulePath            string
@@ -104,7 +104,7 @@ type Internal__StructAdapter[T any, Builder any] struct {
 // Call AddField / AddRemovedNumber for each field and removed number,
 // then Finalize before using the adapter.
 func Internal__NewStructAdapter[T, Builder any](
-	defaultInstance T,
+	defaultInstance *T,
 	newMutable func() Builder,
 	toFrozen func(Builder) T,
 	modulePath, qualifiedName, doc string,
@@ -215,6 +215,9 @@ func (a *Internal__StructAdapter[T, Builder]) Finalize() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 func (a *Internal__StructAdapter[T, Builder]) isDefault(value *T) bool {
+	if value == a.defaultInstance {
+		return true
+	}
 	if a.getUnrecognizedFields(value) != nil {
 		return false
 	}
@@ -317,20 +320,20 @@ func (a *Internal__StructAdapter[T, Builder]) fromJson(v fastjson.Value, keepUnr
 	switch v.Type() {
 	case fastjson.TypeNumber:
 		// Dense default: 0 → return default instance.
-		return a.defaultInstance, nil
+		return *a.defaultInstance, nil
 	case fastjson.TypeArray:
 		return a.fromDenseJson(v, keepUnrecognized)
 	case fastjson.TypeObject:
 		return a.fromReadableJson(v)
 	default:
-		return a.defaultInstance, nil
+		return *a.defaultInstance, nil
 	}
 }
 
 func (a *Internal__StructAdapter[T, Builder]) fromDenseJson(arr fastjson.Value, keepUnrecognized bool) (T, error) {
 	items, err := arr.Array()
 	if err != nil {
-		return a.defaultInstance, err
+		return *a.defaultInstance, err
 	}
 	mutable := a.newMutable()
 	recognizedCount := len(a.slotToEntry)
@@ -351,7 +354,7 @@ func (a *Internal__StructAdapter[T, Builder]) fromDenseJson(arr fastjson.Value, 
 			break
 		}
 		if err := e.setEntryFromJson(mutable, *items[n], keepUnrecognized); err != nil {
-			return a.defaultInstance, err
+			return *a.defaultInstance, err
 		}
 	}
 	return a.toFrozen(mutable), nil
@@ -361,7 +364,7 @@ func (a *Internal__StructAdapter[T, Builder]) fromReadableJson(obj fastjson.Valu
 	mutable := a.newMutable()
 	jsonObj, err := obj.Object()
 	if err != nil {
-		return a.defaultInstance, err
+		return *a.defaultInstance, err
 	}
 	var visitErr error
 	jsonObj.Visit(func(key []byte, v *fastjson.Value) {
@@ -373,7 +376,7 @@ func (a *Internal__StructAdapter[T, Builder]) fromReadableJson(obj fastjson.Valu
 		}
 	})
 	if visitErr != nil {
-		return a.defaultInstance, visitErr
+		return *a.defaultInstance, visitErr
 	}
 	return a.toFrozen(mutable), nil
 }
@@ -414,7 +417,7 @@ func (a *Internal__StructAdapter[T, Builder]) encode(input *T, out *binaryOutput
 func (a *Internal__StructAdapter[T, Builder]) decode(in *binaryInput, keepUnrecognized bool) (T, error) {
 	wire := in.readUint8()
 	if wire == 0 || wire == 246 {
-		return a.defaultInstance, nil
+		return *a.defaultInstance, nil
 	}
 	mutable := a.newMutable()
 	var encodedSlotCount int

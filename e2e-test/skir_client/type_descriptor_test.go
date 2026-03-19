@@ -637,7 +637,7 @@ func TestTypeDescriptor_RecursiveStruct_AsJson(t *testing.T) {
 	}
 
 	adapter := Internal__NewStructAdapter(
-		recStruct{},
+		&recStruct{},
 		func() *recBuilder { return &recBuilder{} },
 		func(b *recBuilder) recStruct { return b.s },
 		"test", "RecStruct", "",

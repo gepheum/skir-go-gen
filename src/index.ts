@@ -462,7 +462,7 @@ class GoSourceFileGenerator {
     this.push(
       `var _${className}_adapter = skir_client.Internal__NewStructAdapter(\n`,
     );
-    this.push(`_${className}_default,\n`);
+    this.push(`&_${className}_default,\n`);
     this.push(`${className}_partialBuilder,\n`);
     this.push(
       `func(b *${className}_partialBuilderType) ${className} { return b.Build() },\n`,
