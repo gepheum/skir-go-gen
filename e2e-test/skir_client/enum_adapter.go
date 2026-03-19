@@ -143,7 +143,7 @@ type enumWrapperEntry[T, V any] struct {
 	kindOrd  int
 	adapter  typeAdapter[V]
 	wrap     func(V) T
-	getValue func(T) V
+	getValue func(T) *V
 }
 
 func (e *enumWrapperEntry[T, V]) anyEntryNumber() int     { return e.n }
@@ -167,16 +167,16 @@ func (e *enumWrapperEntry[T, V]) variantEntryToJson(input T, eolIndent *string, 
 		out.WriteByte(',')
 		out.WriteString(childIndent)
 		out.WriteString(`"value": `)
-		e.adapter.toJson(&value, &childIndent, out)
+		e.adapter.toJson(value, &childIndent, out)
 		out.WriteString(*eolIndent)
 		out.WriteByte('}')
-		return
+	} else {
+		out.WriteByte('[')
+		out.WriteString(strconv.Itoa(e.n))
+		out.WriteByte(',')
+		e.adapter.toJson(value, nil, out)
+		out.WriteByte(']')
 	}
-	out.WriteByte('[')
-	out.WriteString(strconv.Itoa(e.n))
-	out.WriteByte(',')
-	e.adapter.toJson(&value, nil, out)
-	out.WriteByte(']')
 }
 
 func (e *enumWrapperEntry[T, V]) variantEntryEncode(input T, out *binaryOutput) {
@@ -187,7 +187,7 @@ func (e *enumWrapperEntry[T, V]) variantEntryEncode(input T, out *binaryOutput) 
 		out.writeUint8(248)
 		encodeUint32(uint32(e.n), out)
 	}
-	e.adapter.encode(&value, out)
+	e.adapter.encode(value, out)
 }
 
 func (e *enumWrapperEntry[T, V]) wrapFromJson(v *fastjson.Value, keepUnrecognized bool) (T, error) {
@@ -303,7 +303,7 @@ func Internal__AddWrapperVariant[T, V any](
 	ser Serializer[V],
 	doc string,
 	wrap func(V) T,
-	getValue func(T) V,
+	getValue func(T) *V,
 ) {
 	if a.finalized {
 		panic("skir_client: AddWrapperVariant called after Finalize")

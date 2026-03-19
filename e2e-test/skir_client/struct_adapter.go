@@ -30,7 +30,7 @@ type typedField[T, Builder, V any] struct {
 	number  int
 	doc     string
 	adapter typeAdapter[V]
-	getter  func(*T) V
+	getter  func(*T) *V
 	setter  func(Builder, V)
 }
 
@@ -41,12 +41,12 @@ func (f *typedField[T, Builder, V]) entryType() TypeDescriptor { return f.adapte
 
 func (f *typedField[T, Builder, V]) isEntryDefault(frozen *T) bool {
 	v := f.getter(frozen)
-	return f.adapter.isDefault(&v)
+	return f.adapter.isDefault(v)
 }
 
 func (f *typedField[T, Builder, V]) entryToJson(frozen *T, eolIndent *string, out *strings.Builder) {
 	v := f.getter(frozen)
-	f.adapter.toJson(&v, eolIndent, out)
+	f.adapter.toJson(v, eolIndent, out)
 }
 
 func (f *typedField[T, Builder, V]) setEntryFromJson(mutable Builder, fv fastjson.Value, keepUnrecognized bool) error {
@@ -60,7 +60,7 @@ func (f *typedField[T, Builder, V]) setEntryFromJson(mutable Builder, fv fastjso
 
 func (f *typedField[T, Builder, V]) encodeEntry(frozen *T, out *binaryOutput) {
 	v := f.getter(frozen)
-	f.adapter.encode(&v, out)
+	f.adapter.encode(v, out)
 }
 
 func (f *typedField[T, Builder, V]) decodeEntry(mutable Builder, in *binaryInput, keepUnrecognized bool) {
@@ -143,7 +143,7 @@ func Internal__AddField[T, Builder, V any](
 	number int,
 	ser Serializer[V],
 	doc string,
-	getter func(*T) V,
+	getter func(*T) *V,
 	setter func(Builder, V),
 ) {
 	if a.finalized {

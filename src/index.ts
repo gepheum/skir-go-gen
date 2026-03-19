@@ -1,3 +1,5 @@
+// Figure out the pointer conversion: shouldn't ToJson(...) etc. expect a pointer?
+// 'You may pass nil' -> 'The parameter may be nil`
 // RPC code
 // Reflection
 // Rm the weird getters in TypeDescriptor
@@ -490,13 +492,11 @@ class GoSourceFileGenerator {
     this.push("func init() {\n");
     for (const field of struct.record.fields) {
       const fieldName = "_" + convertCase(field.name.text, "lowerCamel");
-      const goType = typeSpeller.getGoType(field.type!);
-      const isHardRecursive = field.isRecursive === "hard";
-      // For hard-recursive fields the struct stores a pointer; wrap with Optional.
-      const serializerExpr = isHardRecursive
-        ? `skir_client.OptionalSerializer(\n${typeSpeller.getSerializerExpression(field.type!)},\n)`
-        : typeSpeller.getSerializerExpression(field.type!);
-      const storedGoType = isHardRecursive ? `*${goType}` : goType;
+      const setterName = "Set" + convertCase(field.name.text, "UpperCamel");
+      const type = field.type!;
+      const goType = typeSpeller.getGoType(type);
+      const serializerExpr = typeSpeller.getSerializerExpression(type);
+      const maybeAmp = field.isRecursive === "hard" ? "" : "&";
       this.push(
         `skir_client.Internal__AddField(\n` +
           `_${className}_adapter,\n` +
@@ -504,8 +504,8 @@ class GoSourceFileGenerator {
           `${field.number},\n` +
           `${serializerExpr},\n` +
           `${toGoStringLiteral(docToCommentText(field.doc))},\n` +
-          `func(s *${className}) ${storedGoType} { return s.${fieldName} },\n` +
-          `func(b *${className}_partialBuilderType, v ${storedGoType}) { b.s.${fieldName} = v },\n` +
+          `func(s *${className}) *${goType} { return ${maybeAmp}s.${fieldName} },\n` +
+          `func(b *${className}_partialBuilderType, v ${goType}) { b.${setterName}(v) },\n` +
           ")\n",
       );
     }
@@ -535,16 +535,75 @@ class GoSourceFileGenerator {
     );
     this.push(`type ${kindType} int\n\n`);
     this.push(`const (\n`);
-    this.push(`${kindType}_Unknown ${kindType} = iota\n`);
+    this.push(`${kindType}_unknown ${kindType} = iota\n`);
     for (const variant of constantVariants) {
-      const name = convertCase(variant.name.text, "UpperCamel");
-      this.push(`${kindType}_${name}Const\n`);
+      const lowerName = convertCase(variant.name.text, "lowerCamel");
+      this.push(`${kindType}_${lowerName}Const\n`);
     }
     for (const variant of wrapperVariants) {
-      const name = convertCase(variant.name.text, "UpperCamel");
-      this.push(`${kindType}_${name}Wrapper\n`);
+      const upperName = convertCase(variant.name.text, "UpperCamel");
+      this.push(`${kindType}_${upperName}Wrapper\n`);
     }
     this.push(")\n\n");
+
+    // Define the value interface and its implementations.
+    const valueInterfaceName = `_${className}_value`;
+    this.push(`type ${valueInterfaceName} interface {\n`);
+    this.push(`UnwrapUnknown() *skir_client.Internal__UnrecognizedVariant\n`);
+    for (const variant of wrapperVariants) {
+      const upperName = convertCase(variant.name.text, "UpperCamel");
+      const goType = typeSpeller.getGoType(variant.type!);
+      this.push(`Unwrap${upperName}() *${goType}\n`);
+    }
+    this.push("}\n\n");
+    // Unknown implementation.
+    const unknownImplName = `_${className}_value_unknown`;
+    this.push(`type ${unknownImplName} struct {\n`);
+    this.push(`v skir_client.Internal__UnrecognizedVariant\n`);
+    this.push("}\n");
+    this.push(
+      `func (w *${unknownImplName}) UnwrapUnknown() *skir_client.Internal__UnrecognizedVariant {\n`,
+    );
+    this.push("return &w.v\n");
+    this.push("}\n");
+    for (const variant of wrapperVariants) {
+      const upperName = convertCase(variant.name.text, "UpperCamel");
+      const goType = typeSpeller.getGoType(variant.type!);
+      this.push(
+        `func (w *${unknownImplName}) Unwrap${upperName}() *${goType} {\n`,
+      );
+      this.push("return nil\n");
+      this.push("}\n");
+    }
+    this.push("\n");
+    // Wrapper variant implementations.
+    for (const variant of wrapperVariants) {
+      const lowerName = convertCase(variant.name.text, "lowerCamel");
+      const implName = `_${className}_value_${lowerName}Wrapper`;
+      const goType = typeSpeller.getGoType(variant.type!);
+      this.push(`type ${implName} struct {\n`);
+      this.push(`v ${goType}\n`);
+      this.push("}\n");
+      this.push(
+        `func (w *${implName}) UnwrapUnknown() *skir_client.Internal__UnrecognizedVariant {\n`,
+      );
+      this.push("return nil\n");
+      this.push("}\n");
+      for (const other of wrapperVariants) {
+        const otherUpperName = convertCase(other.name.text, "UpperCamel");
+        const otherGoType = typeSpeller.getGoType(other.type!);
+        this.push(
+          `func (w *${implName}) Unwrap${otherUpperName}() *${otherGoType} {\n`,
+        );
+        if (other.name.text === variant.name.text) {
+          this.push("return &w.v\n");
+        } else {
+          this.push("return nil\n");
+        }
+        this.push("}\n");
+      }
+      this.push("\n");
+    }
 
     // Define the frozen enum struct.
     this.push(
@@ -552,7 +611,7 @@ class GoSourceFileGenerator {
     );
     this.push(`type ${className} struct {\n`);
     this.push(`kind ${kindType}\n`);
-    this.push("value any\n");
+    this.push(`value ${valueInterfaceName}\n`);
     this.push("}\n\n");
 
     // Kind() getter.
@@ -570,34 +629,38 @@ class GoSourceFileGenerator {
       ),
     );
     this.push(`func (e ${className}) IsUnknown() bool {\n`);
-    this.push(`return e.kind == ${kindType}_Unknown\n`);
+    this.push(`return e.kind == ${kindType}_unknown\n`);
     this.push("}\n\n");
 
     // Is...() methods for constant variants.
     for (const variant of constantVariants) {
-      const name = convertCase(variant.name.text, "UpperCamel");
+      const variantName = variant.name.text;
+      const lowerName = convertCase(variantName, "lowerCamel");
+      const upperName = convertCase(variantName, "UpperCamel");
       this.push(
         commentify([
-          `Is${name}Const returns true if this ${className} holds the '${variant.name.text}' constant variant.`,
+          `Is${upperName}Const returns true if this ${className} holds the '${variantName}' constant variant.`,
           docToCommentText(variant.doc),
         ]),
       );
-      this.push(`func (e ${className}) Is${name}Const() bool {\n`);
-      this.push(`return e.kind == ${kindType}_${name}Const\n`);
+      this.push(`func (e ${className}) Is${upperName}Const() bool {\n`);
+      this.push(`return e.kind == ${kindType}_${lowerName}Const\n`);
       this.push("}\n\n");
     }
 
     // Is...() methods for wrapper variants.
     for (const variant of wrapperVariants) {
-      const name = convertCase(variant.name.text, "UpperCamel");
+      const variantName = variant.name.text;
+      const lowerName = convertCase(variantName, "lowerCamel");
+      const upperName = convertCase(variantName, "UpperCamel");
       this.push(
         commentify([
-          `Is${name}Wrapper returns true if this ${className} holds the '${variant.name.text}' wrapper variant.`,
+          `Is${upperName}Wrapper returns true if this ${className} holds the '${variantName}' wrapper variant.`,
           docToCommentText(variant.doc),
         ]),
       );
-      this.push(`func (e ${className}) Is${name}Wrapper() bool {\n`);
-      this.push(`return e.kind == ${kindType}_${name}Wrapper\n`);
+      this.push(`func (e ${className}) Is${upperName}Wrapper() bool {\n`);
+      this.push(`return e.kind == ${kindType}_${upperName}Wrapper\n`);
       this.push("}\n\n");
     }
 
@@ -612,31 +675,33 @@ class GoSourceFileGenerator {
     this.push(`return ${className}{}\n`);
     this.push("}\n\n");
     for (const variant of constantVariants) {
-      const name = convertCase(variant.name.text, "UpperCamel");
+      const lowerName = convertCase(variant.name.text, "lowerCamel");
       this.push(commentify(docToCommentText(variant.doc)));
-      this.push(`func ${className}_${name}Const() ${className} {\n`);
-      this.push(`return ${className}{kind: ${kindType}_${name}Const}\n`);
+      this.push(`func ${className}_${lowerName}Const() ${className} {\n`);
+      this.push(`return ${className}{kind: ${kindType}_${lowerName}Const}\n`);
       this.push("}\n\n");
     }
 
     // Factory functions for wrapper variants.
     for (const variant of wrapperVariants) {
       const variantName = variant.name.text;
-      const name = convertCase(variantName, "UpperCamel");
+      const lowerName = convertCase(variantName, "lowerCamel");
       const variantType = variant.type!;
       const goType = typeSpeller.getGoType(variantType);
       this.push(
         commentify([
-          `${className}_${name}Wrapper creates a '${variantName}' variant wrapping the given value.`,
+          `${className}_${lowerName}Wrapper creates a '${variantName}' variant wrapping the given value.`,
           docToCommentText(variant.doc),
           variantType.kind === "optional" ? "You may pass nil." : "",
         ]),
       );
+      const implName = `_${className}_value_${lowerName}Wrapper`;
+      const upperName = convertCase(variantName, "UpperCamel");
       this.push(
-        `func ${className}_${name}Wrapper(v ${goType}) ${className} {\n`,
+        `func ${className}_${lowerName}Wrapper(v ${goType}) ${className} {\n`,
       );
       this.push(
-        `return ${className}{kind: ${kindType}_${name}Wrapper, value: v}\n`,
+        `return ${className}{kind: ${kindType}_${upperName}Wrapper, value: &${implName}{v: v}}\n`,
       );
       this.push("}\n\n");
     }
@@ -644,15 +709,16 @@ class GoSourceFileGenerator {
     // Unwrap...() methods for wrapper variants.
     for (const variant of wrapperVariants) {
       const variantName = variant.name.text;
-      const name = convertCase(variantName, "UpperCamel");
+      const upperName = convertCase(variantName, "UpperCamel");
+      const lowerName = convertCase(variantName, "lowerCamel");
       const type = variant.type!;
       const goType = typeSpeller.getGoType(type);
       const isStructType = this.isStructType(type);
       const returnType = isStructType ? `*${goType}` : goType;
       this.push(
         commentify([
-          `Unwrap${name} returns the '${variantName}' value wrapped in this ${className}.`,
-          `Assumes that Is${name}() is true. Panics otherwise.`,
+          `Unwrap${upperName} returns the '${variantName}' value wrapped in this ${className}.`,
+          `Assumes that Is${upperName}() is true. Panics otherwise.`,
           isStructType
             ? "\nThe return value is never nil."
             : type.kind === "optional"
@@ -660,17 +726,16 @@ class GoSourceFileGenerator {
               : "",
         ]),
       );
-      this.push(`func (e ${className}) Unwrap${name}() ${returnType} {\n`);
-      this.push(`if e.kind != ${kindType}_${name}Wrapper {\n`);
+      this.push(`func (e ${className}) Unwrap${upperName}() ${returnType} {\n`);
+      this.push(`if e.kind != ${kindType}_${upperName}Wrapper {\n`);
       this.push(
-        `panic("${className}.Unwrap${name}(): kind is not ${name}Wrapper")\n`,
+        `panic("${className}.Unwrap${upperName}(): kind is not ${upperName}Wrapper")\n`,
       );
       this.push("}\n");
       if (isStructType) {
-        this.push(`v := e.value.(${goType})\n`);
-        this.push("return &v\n");
+        this.push(`return e.value.Unwrap${upperName}()\n`);
       } else {
-        this.push(`return e.value.(${goType})\n`);
+        this.push(`return *e.value.Unwrap${upperName}()\n`);
       }
       this.push("}\n\n");
     }
@@ -687,15 +752,15 @@ class GoSourceFileGenerator {
     this.push(`type ${className}_visitor[T any] interface {\n`);
     this.push("OnUnknown() T\n");
     for (const variant of constantVariants) {
-      const name = convertCase(variant.name.text, "UpperCamel");
-      this.push(`On${name}Const() T\n`);
+      const upperName = convertCase(variant.name.text, "UpperCamel");
+      this.push(`On${upperName}Const() T\n`);
     }
     for (const variant of wrapperVariants) {
-      const name = convertCase(variant.name.text, "UpperCamel");
+      const upperName = convertCase(variant.name.text, "UpperCamel");
       const goType = typeSpeller.getGoType(variant.type!);
       const isStructType = this.isStructType(variant.type!);
       const paramType = isStructType ? `*${goType}` : goType;
-      this.push(`On${name}Wrapper(v ${paramType}) T\n`);
+      this.push(`On${upperName}Wrapper(v ${paramType}) T\n`);
     }
     this.push("}\n\n");
 
@@ -710,14 +775,18 @@ class GoSourceFileGenerator {
     );
     this.push("switch e.kind {\n");
     for (const variant of constantVariants) {
-      const name = convertCase(variant.name.text, "UpperCamel");
-      this.push(`case ${kindType}_${name}Const:\n`);
-      this.push(`return v.On${name}Const()\n`);
+      const variantName = variant.name.text;
+      const lowerName = convertCase(variantName, "lowerCamel");
+      const upperName = convertCase(variantName, "UpperCamel");
+      this.push(`case ${kindType}_${lowerName}Const:\n`);
+      this.push(`return v.On${upperName}Const()\n`);
     }
     for (const variant of wrapperVariants) {
-      const name = convertCase(variant.name.text, "UpperCamel");
-      this.push(`case ${kindType}_${name}Wrapper:\n`);
-      this.push(`return v.On${name}Wrapper(e.Unwrap${name}())\n`);
+      const variantName = variant.name.text;
+      const lowerName = convertCase(variantName, "lowerCamel");
+      const upperName = convertCase(variant.name.text, "UpperCamel");
+      this.push(`case ${kindType}_${upperName}Wrapper:\n`);
+      this.push(`return v.On${upperName}Wrapper(e.Unwrap${upperName}())\n`);
     }
     this.push("default:\n");
     this.push("return v.OnUnknown()\n");
@@ -744,16 +813,20 @@ class GoSourceFileGenerator {
     this.push(`${kindCount},\n`);
     this.push(`${className}{},\n`);
     this.push(
-      `func(u *skir_client.Internal__UnrecognizedVariant) ${className} ` +
-        `{ return ${className}{value: u} },\n`,
+      `func(u *skir_client.Internal__UnrecognizedVariant) ${className} {\n` +
+        `if u == nil { return ${className}{} }\n` +
+        `return ${className}{value: &_${className}_value_unknown{v: *u}}\n` +
+        `},\n`,
     );
     this.push(
       `func(e ${className}) *skir_client.Internal__UnrecognizedVariant {\n` +
-        `if e.kind != ${kindType}_Unknown {\n` +
+        `if e.kind != ${kindType}_unknown {\n` +
         `return nil\n` +
         `}\n` +
-        `u, _ := e.value.(*skir_client.Internal__UnrecognizedVariant)\n` +
-        `return u\n` +
+        `if e.value == nil {\n` +
+        `return nil\n` +
+        `}\n` +
+        `return e.value.UnwrapUnknown()\n` +
         `},\n`,
     );
     this.push(")\n\n");
@@ -773,34 +846,33 @@ class GoSourceFileGenerator {
     // init() – register variants and finalize.
     this.push("func init() {\n");
     for (const variant of constantVariants) {
-      const name = convertCase(variant.name.text, "UpperCamel");
+      const lowerName = convertCase(variant.name.text, "lowerCamel");
       this.push(
         `_${className}_adapter.AddConstantVariant(\n` +
           `${variant.number},\n` +
           `${toGoStringLiteral(variant.name.text)},\n` +
-          `int(${kindType}_${name}Const),\n` +
+          `int(${kindType}_${lowerName}Const),\n` +
           `${toGoStringLiteral(docToCommentText(variant.doc))},\n` +
-          `${className}_${name}Const(),\n` +
+          `${className}_${lowerName}Const(),\n` +
           ")\n",
       );
     }
     for (const variant of wrapperVariants) {
-      const name = convertCase(variant.name.text, "UpperCamel");
+      const variantName = variant.name.text;
+      const lowerName = convertCase(variantName, "lowerCamel");
+      const upperName = convertCase(variantName, "UpperCamel");
       const goType = typeSpeller.getGoType(variant.type!);
-      const isStructType = this.isStructType(variant.type!);
       const serializerExpr = typeSpeller.getSerializerExpression(variant.type!);
-      const getValueExpr = isStructType
-        ? `func(e ${className}) ${goType} { return *e.Unwrap${name}() }`
-        : `func(e ${className}) ${goType} { return e.Unwrap${name}() }`;
+      const getValueExpr = `func(e ${className}) *${goType} { return e.value.Unwrap${upperName}() }`;
       this.push(
         `skir_client.Internal__AddWrapperVariant(\n` +
           `_${className}_adapter,\n` +
           `${variant.number},\n` +
           `${toGoStringLiteral(variant.name.text)},\n` +
-          `int(${kindType}_${name}Wrapper),\n` +
+          `int(${kindType}_${upperName}Wrapper),\n` +
           `${serializerExpr},\n` +
           `${toGoStringLiteral(docToCommentText(variant.doc))},\n` +
-          `func(v ${goType}) ${className} { return ${className}_${name}Wrapper(v) },\n` +
+          `func(v ${goType}) ${className} { return ${className}_${lowerName}Wrapper(v) },\n` +
           `${getValueExpr},\n` +
           ")\n",
       );
