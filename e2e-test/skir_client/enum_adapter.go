@@ -287,7 +287,7 @@ func (a *Internal__EnumAdapter[T]) AddConstantVariant(
 	a.numberToEntry[number] = e
 	a.nameToVariantEntry[name] = e
 	a.kindOrdinalToEntry[kindOrdinal] = e
-	a.descVariants = append(a.descVariants, &EnumConstantVariant{Name: name, Number: number, Doc: doc})
+	a.descVariants = append(a.descVariants, &EnumConstantVariant{name: name, number: number, doc: doc})
 }
 
 // AddWrapperVariant registers a wrapper variant on an in-progress
@@ -320,10 +320,10 @@ func Internal__AddWrapperVariant[T, V any](
 	a.nameToVariantEntry[name] = e
 	a.kindOrdinalToEntry[kindOrdinal] = e
 	a.descVariants = append(a.descVariants, &EnumWrapperVariant{
-		Name:   name,
-		Number: number,
-		Type:   ser.adapter.typeDescriptor(),
-		Doc:    doc,
+		name:        name,
+		number:      number,
+		variantType: ser.adapter.typeDescriptor(),
+		doc:         doc,
 	})
 }
 
@@ -350,7 +350,7 @@ func (a *Internal__EnumAdapter[T]) Finalize() {
 	a.kindOrdinalToEntry[0] = a.unknownEntry
 	// Populate Variants on the descriptor pre-allocated in NewEnumAdapter
 	// (UNKNOWN is excluded from the descriptor variants).
-	a.desc.Variants = a.descVariants
+	a.desc.variants = a.descVariants
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

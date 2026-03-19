@@ -91,37 +91,37 @@ func TestTypeDescriptor_Primitive_RoundTrip(t *testing.T) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 func TestTypeDescriptor_Optional_AsJson(t *testing.T) {
-	desc := &OptionalDescriptor{OtherType: Int32Descriptor}
+	desc := &OptionalDescriptor{otherType: Int32Descriptor}
 	want := `{"type":{"kind":"optional","value":{"kind":"primitive","value":"int32"}},"records":[]}`
 	assertJsonEqual(t, desc.AsJson(), want)
 }
 
 func TestTypeDescriptor_Optional_RoundTrip(t *testing.T) {
-	desc := &OptionalDescriptor{OtherType: StringDescriptor}
+	desc := &OptionalDescriptor{otherType: StringDescriptor}
 	got := mustParseTypeDescriptor(t, desc.AsJson())
 	opt, ok := got.(*OptionalDescriptor)
 	if !ok {
 		t.Fatalf("got %T, want *OptionalDescriptor", got)
 	}
-	if opt.OtherType != StringDescriptor {
-		t.Errorf("OtherType = %v, want StringDescriptor", opt.OtherType)
+	if opt.GetOtherType() != StringDescriptor {
+		t.Errorf("OtherType = %v, want StringDescriptor", opt.GetOtherType())
 	}
 }
 
 func TestTypeDescriptor_NestedOptional_RoundTrip(t *testing.T) {
 	// optional(optional(bool))
-	desc := &OptionalDescriptor{OtherType: &OptionalDescriptor{OtherType: BoolDescriptor}}
+	desc := &OptionalDescriptor{otherType: &OptionalDescriptor{otherType: BoolDescriptor}}
 	got := mustParseTypeDescriptor(t, desc.AsJson())
 	outer, ok := got.(*OptionalDescriptor)
 	if !ok {
 		t.Fatalf("outer: got %T, want *OptionalDescriptor", got)
 	}
-	inner, ok := outer.OtherType.(*OptionalDescriptor)
+	inner, ok := outer.GetOtherType().(*OptionalDescriptor)
 	if !ok {
-		t.Fatalf("inner: got %T, want *OptionalDescriptor", outer.OtherType)
+		t.Fatalf("inner: got %T, want *OptionalDescriptor", outer.GetOtherType())
 	}
-	if inner.OtherType != BoolDescriptor {
-		t.Errorf("innermost type = %v, want BoolDescriptor", inner.OtherType)
+	if inner.GetOtherType() != BoolDescriptor {
+		t.Errorf("innermost type = %v, want BoolDescriptor", inner.GetOtherType())
 	}
 }
 
@@ -130,13 +130,13 @@ func TestTypeDescriptor_NestedOptional_RoundTrip(t *testing.T) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 func TestTypeDescriptor_Array_AsJson(t *testing.T) {
-	desc := &ArrayDescriptor{ItemType: StringDescriptor}
+	desc := &ArrayDescriptor{itemType: StringDescriptor}
 	want := `{"type":{"kind":"array","value":{"item":{"kind":"primitive","value":"string"}}},"records":[]}`
 	assertJsonEqual(t, desc.AsJson(), want)
 }
 
 func TestTypeDescriptor_Array_WithKeyExtractor_AsJson(t *testing.T) {
-	desc := &ArrayDescriptor{ItemType: StringDescriptor, KeyExtractor: "id"}
+	desc := &ArrayDescriptor{itemType: StringDescriptor, keyExtractor: "id"}
 	got := desc.AsJson()
 	// key_extractor must appear in the output
 	var v map[string]any
@@ -151,29 +151,29 @@ func TestTypeDescriptor_Array_WithKeyExtractor_AsJson(t *testing.T) {
 }
 
 func TestTypeDescriptor_Array_RoundTrip(t *testing.T) {
-	desc := &ArrayDescriptor{ItemType: Int64Descriptor}
+	desc := &ArrayDescriptor{itemType: Int64Descriptor}
 	got := mustParseTypeDescriptor(t, desc.AsJson())
 	arr, ok := got.(*ArrayDescriptor)
 	if !ok {
 		t.Fatalf("got %T, want *ArrayDescriptor", got)
 	}
-	if arr.ItemType != Int64Descriptor {
-		t.Errorf("ItemType = %v, want Int64Descriptor", arr.ItemType)
+	if arr.GetItemType() != Int64Descriptor {
+		t.Errorf("ItemType = %v, want Int64Descriptor", arr.GetItemType())
 	}
-	if arr.KeyExtractor != "" {
-		t.Errorf("KeyExtractor = %q, want empty", arr.KeyExtractor)
+	if arr.GetKeyExtractor() != "" {
+		t.Errorf("KeyExtractor = %q, want empty", arr.GetKeyExtractor())
 	}
 }
 
 func TestTypeDescriptor_Array_KeyExtractor_RoundTrip(t *testing.T) {
-	desc := &ArrayDescriptor{ItemType: StringDescriptor, KeyExtractor: "some.key"}
+	desc := &ArrayDescriptor{itemType: StringDescriptor, keyExtractor: "some.key"}
 	got := mustParseTypeDescriptor(t, desc.AsJson())
 	arr, ok := got.(*ArrayDescriptor)
 	if !ok {
 		t.Fatalf("got %T, want *ArrayDescriptor", got)
 	}
-	if arr.KeyExtractor != "some.key" {
-		t.Errorf("KeyExtractor = %q, want %q", arr.KeyExtractor, "some.key")
+	if arr.GetKeyExtractor() != "some.key" {
+		t.Errorf("KeyExtractor = %q, want %q", arr.GetKeyExtractor(), "some.key")
 	}
 }
 
@@ -188,8 +188,8 @@ func makeSimpleStruct() *StructDescriptor {
 		"doc for MyStruct",
 		map[int]struct{}{5: {}},
 		[]*StructField{
-			{Name: "name", Number: 1, Type: StringDescriptor, Doc: "the name"},
-			{Name: "age", Number: 2, Type: Int32Descriptor},
+			{name: "name", number: 1, fieldType: StringDescriptor, doc: "the name"},
+			{name: "age", number: 2, fieldType: Int32Descriptor},
 		},
 	)
 }
@@ -257,19 +257,19 @@ func TestTypeDescriptor_Struct_RoundTrip(t *testing.T) {
 	if sd.GetDoc() != "doc for MyStruct" {
 		t.Errorf("Doc = %q, want 'doc for MyStruct'", sd.GetDoc())
 	}
-	if len(sd.Fields) != 2 {
-		t.Fatalf("len(Fields) = %d, want 2", len(sd.Fields))
+	if len(sd.GetFields()) != 2 {
+		t.Fatalf("len(Fields) = %d, want 2", len(sd.GetFields()))
 	}
-	if sd.Fields[0].Name != "name" || sd.Fields[0].Number != 1 || sd.Fields[0].Type != StringDescriptor {
-		t.Errorf("Field 0 = %+v", sd.Fields[0])
+	if sd.GetFields()[0].GetName() != "name" || sd.GetFields()[0].GetNumber() != 1 || sd.GetFields()[0].GetType() != StringDescriptor {
+		t.Errorf("Field 0 = %+v", sd.GetFields()[0])
 	}
-	if sd.Fields[0].Doc != "the name" {
-		t.Errorf("Field 0 Doc = %q, want 'the name'", sd.Fields[0].Doc)
+	if sd.GetFields()[0].GetDoc() != "the name" {
+		t.Errorf("Field 0 Doc = %q, want 'the name'", sd.GetFields()[0].GetDoc())
 	}
-	if sd.Fields[1].Name != "age" || sd.Fields[1].Type != Int32Descriptor {
-		t.Errorf("Field 1 = %+v", sd.Fields[1])
+	if sd.GetFields()[1].GetName() != "age" || sd.GetFields()[1].GetType() != Int32Descriptor {
+		t.Errorf("Field 1 = %+v", sd.GetFields()[1])
 	}
-	if _, ok := sd.RemovedNumbers[5]; !ok {
+	if _, ok := sd.GetRemovedNumbers()[5]; !ok {
 		t.Error("RemovedNumbers should contain 5")
 	}
 }
@@ -293,9 +293,9 @@ func makeSimpleEnum() *EnumDescriptor {
 		"a color enum",
 		map[int]struct{}{4: {}},
 		[]EnumVariant{
-			&EnumConstantVariant{Name: "RED", Number: 1, Doc: "red color"},
-			&EnumConstantVariant{Name: "GREEN", Number: 2},
-			&EnumConstantVariant{Name: "BLUE", Number: 3},
+			&EnumConstantVariant{name: "RED", number: 1, doc: "red color"},
+			&EnumConstantVariant{name: "GREEN", number: 2},
+			&EnumConstantVariant{name: "BLUE", number: 3},
 		},
 	)
 }
@@ -348,16 +348,16 @@ func TestTypeDescriptor_Enum_RoundTrip(t *testing.T) {
 	if ed.GetDoc() != "a color enum" {
 		t.Errorf("Doc = %q, want 'a color enum'", ed.GetDoc())
 	}
-	if len(ed.Variants) != 3 {
-		t.Fatalf("len(Variants) = %d, want 3", len(ed.Variants))
+	if len(ed.GetVariants()) != 3 {
+		t.Fatalf("len(Variants) = %d, want 3", len(ed.GetVariants()))
 	}
-	if ed.Variants[0].GetName() != "RED" || ed.Variants[0].GetNumber() != 1 {
-		t.Errorf("Variant 0 = %+v", ed.Variants[0])
+	if ed.GetVariants()[0].GetName() != "RED" || ed.GetVariants()[0].GetNumber() != 1 {
+		t.Errorf("Variant 0 = %+v", ed.GetVariants()[0])
 	}
-	if ed.Variants[0].GetDoc() != "red color" {
-		t.Errorf("Variant 0 doc = %q, want 'red color'", ed.Variants[0].GetDoc())
+	if ed.GetVariants()[0].GetDoc() != "red color" {
+		t.Errorf("Variant 0 doc = %q, want 'red color'", ed.GetVariants()[0].GetDoc())
 	}
-	if _, ok := ed.RemovedNumbers[4]; !ok {
+	if _, ok := ed.GetRemovedNumbers()[4]; !ok {
 		t.Error("RemovedNumbers should contain 4")
 	}
 }
@@ -373,9 +373,9 @@ func makeWrapperEnum() *EnumDescriptor {
 		"",
 		map[int]struct{}{},
 		[]EnumVariant{
-			&EnumConstantVariant{Name: "EMPTY", Number: 1},
-			&EnumWrapperVariant{Name: "VALUE", Number: 2, Type: StringDescriptor},
-			&EnumWrapperVariant{Name: "ERROR", Number: 3, Type: Int32Descriptor, Doc: "error code"},
+			&EnumConstantVariant{name: "EMPTY", number: 1},
+			&EnumWrapperVariant{name: "VALUE", number: 2, variantType: StringDescriptor},
+			&EnumWrapperVariant{name: "ERROR", number: 3, variantType: Int32Descriptor, doc: "error code"},
 		},
 	)
 }
@@ -411,25 +411,25 @@ func TestTypeDescriptor_Enum_WrapperVariant_RoundTrip(t *testing.T) {
 	if !ok {
 		t.Fatalf("got %T, want *EnumDescriptor", got)
 	}
-	if len(ed.Variants) != 3 {
-		t.Fatalf("len(Variants) = %d, want 3", len(ed.Variants))
+	if len(ed.GetVariants()) != 3 {
+		t.Fatalf("len(Variants) = %d, want 3", len(ed.GetVariants()))
 	}
-	if _, ok := ed.Variants[0].(*EnumConstantVariant); !ok {
-		t.Errorf("Variant 0: got %T, want *EnumConstantVariant", ed.Variants[0])
+	if _, ok := ed.GetVariants()[0].(*EnumConstantVariant); !ok {
+		t.Errorf("Variant 0: got %T, want *EnumConstantVariant", ed.GetVariants()[0])
 	}
-	wv, ok := ed.Variants[1].(*EnumWrapperVariant)
+	wv, ok := ed.GetVariants()[1].(*EnumWrapperVariant)
 	if !ok {
-		t.Fatalf("Variant 1: got %T, want *EnumWrapperVariant", ed.Variants[1])
+		t.Fatalf("Variant 1: got %T, want *EnumWrapperVariant", ed.GetVariants()[1])
 	}
-	if wv.Type != StringDescriptor {
-		t.Errorf("Variant 1 type = %v, want StringDescriptor", wv.Type)
+	if wv.GetType() != StringDescriptor {
+		t.Errorf("Variant 1 type = %v, want StringDescriptor", wv.GetType())
 	}
-	wv2, ok := ed.Variants[2].(*EnumWrapperVariant)
+	wv2, ok := ed.GetVariants()[2].(*EnumWrapperVariant)
 	if !ok {
-		t.Fatalf("Variant 2: got %T, want *EnumWrapperVariant", ed.Variants[2])
+		t.Fatalf("Variant 2: got %T, want *EnumWrapperVariant", ed.GetVariants()[2])
 	}
-	if wv2.Doc != "error code" {
-		t.Errorf("Variant 2 doc = %q, want 'error code'", wv2.Doc)
+	if wv2.GetDoc() != "error code" {
+		t.Errorf("Variant 2 doc = %q, want 'error code'", wv2.GetDoc())
 	}
 }
 
@@ -439,10 +439,10 @@ func TestTypeDescriptor_Enum_WrapperVariant_RoundTrip(t *testing.T) {
 
 func TestTypeDescriptor_Struct_RecordField_RoundTrip(t *testing.T) {
 	inner := newStructDescriptor("pkg", "Inner", "", map[int]struct{}{}, []*StructField{
-		{Name: "x", Number: 1, Type: Int32Descriptor},
+		{name: "x", number: 1, fieldType: Int32Descriptor},
 	})
 	outer := newStructDescriptor("pkg", "Outer", "", map[int]struct{}{}, []*StructField{
-		{Name: "inner", Number: 1, Type: inner},
+		{name: "inner", number: 1, fieldType: inner},
 	})
 
 	got := mustParseTypeDescriptor(t, outer.AsJson())
@@ -453,16 +453,16 @@ func TestTypeDescriptor_Struct_RecordField_RoundTrip(t *testing.T) {
 	if sd.GetQualifiedName() != "Outer" {
 		t.Errorf("QualifiedName = %q, want Outer", sd.GetQualifiedName())
 	}
-	innerField := sd.Fields[0]
-	innerSD, ok := innerField.Type.(*StructDescriptor)
+	innerField := sd.GetFields()[0]
+	innerSD, ok := innerField.GetType().(*StructDescriptor)
 	if !ok {
-		t.Fatalf("inner field type: got %T, want *StructDescriptor", innerField.Type)
+		t.Fatalf("inner field type: got %T, want *StructDescriptor", innerField.GetType())
 	}
 	if innerSD.GetQualifiedName() != "Inner" {
 		t.Errorf("inner QualifiedName = %q, want Inner", innerSD.GetQualifiedName())
 	}
-	if len(innerSD.Fields) != 1 || innerSD.Fields[0].Name != "x" {
-		t.Errorf("inner fields = %+v", innerSD.Fields)
+	if len(innerSD.GetFields()) != 1 || innerSD.GetFields()[0].GetName() != "x" {
+		t.Errorf("inner fields = %+v", innerSD.GetFields())
 	}
 }
 
@@ -472,21 +472,21 @@ func TestTypeDescriptor_Struct_RecordField_RoundTrip(t *testing.T) {
 
 func TestTypeDescriptor_ArrayOfStruct_RoundTrip(t *testing.T) {
 	item := newStructDescriptor("mod", "Item", "", map[int]struct{}{}, []*StructField{
-		{Name: "id", Number: 1, Type: Hash64Descriptor},
+		{name: "id", number: 1, fieldType: Hash64Descriptor},
 	})
-	desc := &ArrayDescriptor{ItemType: item, KeyExtractor: "id"}
+	desc := &ArrayDescriptor{itemType: item, keyExtractor: "id"}
 
 	got := mustParseTypeDescriptor(t, desc.AsJson())
 	arr, ok := got.(*ArrayDescriptor)
 	if !ok {
 		t.Fatalf("got %T, want *ArrayDescriptor", got)
 	}
-	if arr.KeyExtractor != "id" {
-		t.Errorf("KeyExtractor = %q, want id", arr.KeyExtractor)
+	if arr.GetKeyExtractor() != "id" {
+		t.Errorf("KeyExtractor = %q, want id", arr.GetKeyExtractor())
 	}
-	itemSD, ok := arr.ItemType.(*StructDescriptor)
+	itemSD, ok := arr.GetItemType().(*StructDescriptor)
 	if !ok {
-		t.Fatalf("ItemType: got %T, want *StructDescriptor", arr.ItemType)
+		t.Fatalf("ItemType: got %T, want *StructDescriptor", arr.GetItemType())
 	}
 	if itemSD.GetQualifiedName() != "Item" {
 		t.Errorf("item QualifiedName = %q, want Item", itemSD.GetQualifiedName())
@@ -499,16 +499,16 @@ func TestTypeDescriptor_ArrayOfStruct_RoundTrip(t *testing.T) {
 
 func TestTypeDescriptor_OptionalOfStruct_RoundTrip(t *testing.T) {
 	sd := newStructDescriptor("mod", "Foo", "", map[int]struct{}{}, nil)
-	desc := &OptionalDescriptor{OtherType: sd}
+	desc := &OptionalDescriptor{otherType: sd}
 
 	got := mustParseTypeDescriptor(t, desc.AsJson())
 	opt, ok := got.(*OptionalDescriptor)
 	if !ok {
 		t.Fatalf("got %T, want *OptionalDescriptor", got)
 	}
-	inner, ok := opt.OtherType.(*StructDescriptor)
+	inner, ok := opt.GetOtherType().(*StructDescriptor)
 	if !ok {
-		t.Fatalf("OtherType: got %T, want *StructDescriptor", opt.OtherType)
+		t.Fatalf("OtherType: got %T, want *StructDescriptor", opt.GetOtherType())
 	}
 	if inner.GetQualifiedName() != "Foo" {
 		t.Errorf("QualifiedName = %q, want Foo", inner.GetQualifiedName())
@@ -521,11 +521,11 @@ func TestTypeDescriptor_OptionalOfStruct_RoundTrip(t *testing.T) {
 
 func TestTypeDescriptor_Struct_SharedRecord_AppearsOnce(t *testing.T) {
 	shared := newStructDescriptor("mod", "Shared", "", map[int]struct{}{}, []*StructField{
-		{Name: "v", Number: 1, Type: Int32Descriptor},
+		{name: "v", number: 1, fieldType: Int32Descriptor},
 	})
 	outer := newStructDescriptor("mod", "Outer", "", map[int]struct{}{}, []*StructField{
-		{Name: "a", Number: 1, Type: shared},
-		{Name: "b", Number: 2, Type: shared},
+		{name: "a", number: 1, fieldType: shared},
+		{name: "b", number: 2, fieldType: shared},
 	})
 
 	got := outer.AsJson()
@@ -594,10 +594,10 @@ func TestTypeDescriptor_RemovedNumbers_RoundTrip(t *testing.T) {
 	orig := newStructDescriptor("m", "S", "", map[int]struct{}{3: {}, 7: {}}, nil)
 	got := mustParseTypeDescriptor(t, orig.AsJson())
 	sd := got.(*StructDescriptor)
-	if _, ok := sd.RemovedNumbers[3]; !ok {
+	if _, ok := sd.GetRemovedNumbers()[3]; !ok {
 		t.Error("RemovedNumbers should contain 3")
 	}
-	if _, ok := sd.RemovedNumbers[7]; !ok {
+	if _, ok := sd.GetRemovedNumbers()[7]; !ok {
 		t.Error("RemovedNumbers should contain 7")
 	}
 }

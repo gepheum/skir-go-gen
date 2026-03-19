@@ -882,8 +882,8 @@ func NewArrayAdapter[E any](item typeAdapter[E], keyExtractor string) *arrayAdap
 	return &arrayAdapter[E]{
 		item: item,
 		desc: &ArrayDescriptor{
-			ItemType:     item.typeDescriptor(),
-			KeyExtractor: keyExtractor,
+			itemType:     item.typeDescriptor(),
+			keyExtractor: keyExtractor,
 		},
 	}
 }
@@ -1008,7 +1008,7 @@ type optionalAdapter[E any] struct {
 func NewOptionalAdapter[E any](other typeAdapter[E]) *optionalAdapter[E] {
 	return &optionalAdapter[E]{
 		other: other,
-		desc:  &OptionalDescriptor{OtherType: other.typeDescriptor()},
+		desc:  &OptionalDescriptor{otherType: other.typeDescriptor()},
 	}
 }
 

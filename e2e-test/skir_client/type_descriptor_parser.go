@@ -70,13 +70,13 @@ func parseTypeDescriptorFromValue(root *fastjson.Value) (TypeDescriptor, error) 
 				}
 				doc := string(fv.GetStringBytes("doc"))
 				fields = append(fields, &StructField{
-					Name:   name,
-					Number: number,
-					Type:   t,
-					Doc:    doc,
+					name:      name,
+					number:    number,
+					fieldType: t,
+					doc:       doc,
 				})
 			}
-			d.Fields = fields
+			d.fields = fields
 
 		case *EnumDescriptor:
 			variants := make([]EnumVariant, 0, len(bundle.fieldsOrVariants))
@@ -91,20 +91,20 @@ func parseTypeDescriptorFromValue(root *fastjson.Value) (TypeDescriptor, error) 
 						return nil, err
 					}
 					variants = append(variants, &EnumWrapperVariant{
-						Name:   name,
-						Number: number,
-						Type:   t,
-						Doc:    doc,
+						name:        name,
+						number:      number,
+						variantType: t,
+						doc:         doc,
 					})
 				} else {
 					variants = append(variants, &EnumConstantVariant{
-						Name:   name,
-						Number: number,
-						Doc:    doc,
+						name:   name,
+						number: number,
+						doc:    doc,
 					})
 				}
 			}
-			d.Variants = variants
+			d.variants = variants
 		}
 	}
 
@@ -187,7 +187,7 @@ func parseTypeSignature(v *fastjson.Value, recordIdToBundle map[string]*recordBu
 		if err != nil {
 			return nil, err
 		}
-		return &OptionalDescriptor{OtherType: inner}, nil
+		return &OptionalDescriptor{otherType: inner}, nil
 
 	case "array":
 		itemVal := val.Get("item")
@@ -199,7 +199,7 @@ func parseTypeSignature(v *fastjson.Value, recordIdToBundle map[string]*recordBu
 			return nil, err
 		}
 		keyExtractor := string(val.GetStringBytes("key_extractor"))
-		return &ArrayDescriptor{ItemType: itemType, KeyExtractor: keyExtractor}, nil
+		return &ArrayDescriptor{itemType: itemType, keyExtractor: keyExtractor}, nil
 
 	case "record":
 		recordId := string(val.GetStringBytes())

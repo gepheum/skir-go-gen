@@ -158,8 +158,8 @@ func TestBoolSerializer_TypeDescriptor(t *testing.T) {
 	if !ok {
 		t.Fatalf("TypeDescriptor type = %T, want *PrimitiveDescriptor", d)
 	}
-	if pd.PrimitiveType != PrimitiveTypeBool {
-		t.Errorf("PrimitiveType = %v, want PrimitiveTypeBool", pd.PrimitiveType)
+	if pd.GetPrimitiveType() != PrimitiveTypeBool {
+		t.Errorf("PrimitiveType = %v, want PrimitiveTypeBool", pd.GetPrimitiveType())
 	}
 }
 
@@ -265,8 +265,8 @@ func TestInt32Serializer_TypeDescriptor(t *testing.T) {
 	if !ok {
 		t.Fatalf("TypeDescriptor type = %T, want *PrimitiveDescriptor", d)
 	}
-	if pd.PrimitiveType != PrimitiveTypeInt32 {
-		t.Errorf("PrimitiveType = %v, want PrimitiveTypeInt32", pd.PrimitiveType)
+	if pd.GetPrimitiveType() != PrimitiveTypeInt32 {
+		t.Errorf("PrimitiveType = %v, want PrimitiveTypeInt32", pd.GetPrimitiveType())
 	}
 }
 
@@ -373,8 +373,8 @@ func TestInt64Serializer_TypeDescriptor(t *testing.T) {
 	if !ok {
 		t.Fatalf("TypeDescriptor type = %T, want *PrimitiveDescriptor", d)
 	}
-	if pd.PrimitiveType != PrimitiveTypeInt64 {
-		t.Errorf("PrimitiveType = %v, want PrimitiveTypeInt64", pd.PrimitiveType)
+	if pd.GetPrimitiveType() != PrimitiveTypeInt64 {
+		t.Errorf("PrimitiveType = %v, want PrimitiveTypeInt64", pd.GetPrimitiveType())
 	}
 }
 
@@ -473,8 +473,8 @@ func TestHash64Serializer_TypeDescriptor(t *testing.T) {
 	if !ok {
 		t.Fatalf("TypeDescriptor type = %T, want *PrimitiveDescriptor", d)
 	}
-	if pd.PrimitiveType != PrimitiveTypeHash64 {
-		t.Errorf("PrimitiveType = %v, want PrimitiveTypeHash64", pd.PrimitiveType)
+	if pd.GetPrimitiveType() != PrimitiveTypeHash64 {
+		t.Errorf("PrimitiveType = %v, want PrimitiveTypeHash64", pd.GetPrimitiveType())
 	}
 }
 
@@ -618,8 +618,8 @@ func TestFloat32Serializer_TypeDescriptor(t *testing.T) {
 	if !ok {
 		t.Fatalf("TypeDescriptor type = %T, want *PrimitiveDescriptor", d)
 	}
-	if pd.PrimitiveType != PrimitiveTypeFloat32 {
-		t.Errorf("PrimitiveType = %v, want PrimitiveTypeFloat32", pd.PrimitiveType)
+	if pd.GetPrimitiveType() != PrimitiveTypeFloat32 {
+		t.Errorf("PrimitiveType = %v, want PrimitiveTypeFloat32", pd.GetPrimitiveType())
 	}
 }
 
@@ -762,8 +762,8 @@ func TestFloat64Serializer_TypeDescriptor(t *testing.T) {
 	if !ok {
 		t.Fatalf("TypeDescriptor type = %T, want *PrimitiveDescriptor", d)
 	}
-	if pd.PrimitiveType != PrimitiveTypeFloat64 {
-		t.Errorf("PrimitiveType = %v, want PrimitiveTypeFloat64", pd.PrimitiveType)
+	if pd.GetPrimitiveType() != PrimitiveTypeFloat64 {
+		t.Errorf("PrimitiveType = %v, want PrimitiveTypeFloat64", pd.GetPrimitiveType())
 	}
 }
 
@@ -936,8 +936,8 @@ func TestTimestampSerializer_TypeDescriptor(t *testing.T) {
 	if !ok {
 		t.Fatalf("TypeDescriptor type = %T, want *PrimitiveDescriptor", d)
 	}
-	if pd.PrimitiveType != PrimitiveTypeTimestamp {
-		t.Errorf("PrimitiveType = %v, want PrimitiveTypeTimestamp", pd.PrimitiveType)
+	if pd.GetPrimitiveType() != PrimitiveTypeTimestamp {
+		t.Errorf("PrimitiveType = %v, want PrimitiveTypeTimestamp", pd.GetPrimitiveType())
 	}
 }
 
@@ -1105,8 +1105,8 @@ func TestBytesSerializer_TypeDescriptor(t *testing.T) {
 	if !ok {
 		t.Fatalf("TypeDescriptor type = %T, want *PrimitiveDescriptor", d)
 	}
-	if pd.PrimitiveType != PrimitiveTypeBytes {
-		t.Errorf("PrimitiveType = %v, want PrimitiveTypeBytes", pd.PrimitiveType)
+	if pd.GetPrimitiveType() != PrimitiveTypeBytes {
+		t.Errorf("PrimitiveType = %v, want PrimitiveTypeBytes", pd.GetPrimitiveType())
 	}
 }
 
@@ -1363,7 +1363,7 @@ func TestStringSerializer_TypeDescriptor(t *testing.T) {
 	if !ok {
 		t.Fatalf("TypeDescriptor type = %T, want *PrimitiveDescriptor", d)
 	}
-	if pd.PrimitiveType != PrimitiveTypeString {
-		t.Errorf("PrimitiveType = %v, want PrimitiveTypeString", pd.PrimitiveType)
+	if pd.GetPrimitiveType() != PrimitiveTypeString {
+		t.Errorf("PrimitiveType = %v, want PrimitiveTypeString", pd.GetPrimitiveType())
 	}
 }

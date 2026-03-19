@@ -201,13 +201,13 @@ func (a *Internal__StructAdapter[T, Builder]) Finalize() {
 	fields := make([]*StructField, len(a.orderedEntries))
 	for i, e := range a.orderedEntries {
 		fields[i] = &StructField{
-			Name:   e.entryName(),
-			Number: e.entryNumber(),
-			Type:   e.entryType(),
-			Doc:    e.entryDoc(),
+			name:      e.entryName(),
+			number:    e.entryNumber(),
+			fieldType: e.entryType(),
+			doc:       e.entryDoc(),
 		}
 	}
-	a.desc.Fields = fields
+	a.desc.fields = fields
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

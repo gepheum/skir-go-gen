@@ -86,20 +86,23 @@ type TypeDescriptor interface {
 
 // PrimitiveDescriptor describes a primitive skir type.
 type PrimitiveDescriptor struct {
-	PrimitiveType PrimitiveType
+	primitiveType PrimitiveType
 }
+
+// GetPrimitiveType returns the PrimitiveType value.
+func (d *PrimitiveDescriptor) GetPrimitiveType() PrimitiveType { return d.primitiveType }
 
 // Singleton instances – one per primitive type.
 var (
-	BoolDescriptor      = &PrimitiveDescriptor{PrimitiveType: PrimitiveTypeBool}
-	Int32Descriptor     = &PrimitiveDescriptor{PrimitiveType: PrimitiveTypeInt32}
-	Int64Descriptor     = &PrimitiveDescriptor{PrimitiveType: PrimitiveTypeInt64}
-	Hash64Descriptor    = &PrimitiveDescriptor{PrimitiveType: PrimitiveTypeHash64}
-	Float32Descriptor   = &PrimitiveDescriptor{PrimitiveType: PrimitiveTypeFloat32}
-	Float64Descriptor   = &PrimitiveDescriptor{PrimitiveType: PrimitiveTypeFloat64}
-	TimestampDescriptor = &PrimitiveDescriptor{PrimitiveType: PrimitiveTypeTimestamp}
-	StringDescriptor    = &PrimitiveDescriptor{PrimitiveType: PrimitiveTypeString}
-	BytesDescriptor     = &PrimitiveDescriptor{PrimitiveType: PrimitiveTypeBytes}
+	BoolDescriptor      = &PrimitiveDescriptor{primitiveType: PrimitiveTypeBool}
+	Int32Descriptor     = &PrimitiveDescriptor{primitiveType: PrimitiveTypeInt32}
+	Int64Descriptor     = &PrimitiveDescriptor{primitiveType: PrimitiveTypeInt64}
+	Hash64Descriptor    = &PrimitiveDescriptor{primitiveType: PrimitiveTypeHash64}
+	Float32Descriptor   = &PrimitiveDescriptor{primitiveType: PrimitiveTypeFloat32}
+	Float64Descriptor   = &PrimitiveDescriptor{primitiveType: PrimitiveTypeFloat64}
+	TimestampDescriptor = &PrimitiveDescriptor{primitiveType: PrimitiveTypeTimestamp}
+	StringDescriptor    = &PrimitiveDescriptor{primitiveType: PrimitiveTypeString}
+	BytesDescriptor     = &PrimitiveDescriptor{primitiveType: PrimitiveTypeBytes}
 )
 
 // primitiveDescriptorByType returns the singleton PrimitiveDescriptor for pt.
@@ -138,9 +141,11 @@ func (d *PrimitiveDescriptor) AsJson() string      { return typeDescriptorToJson
 // OptionalDescriptor describes an optional type that can hold either a value of
 // the wrapped type or a null/zero value.
 type OptionalDescriptor struct {
-	// OtherType is the type descriptor for the wrapped non-null type.
-	OtherType TypeDescriptor
+	otherType TypeDescriptor
 }
+
+// GetOtherType returns the type descriptor for the wrapped non-null type.
+func (d *OptionalDescriptor) GetOtherType() TypeDescriptor { return d.otherType }
 
 func (d *OptionalDescriptor) sealTypeDescriptor() {}
 func (d *OptionalDescriptor) AsJson() string      { return typeDescriptorToJson(d) }
@@ -151,14 +156,19 @@ func (d *OptionalDescriptor) AsJson() string      { return typeDescriptorToJson(
 
 // ArrayDescriptor describes an ordered collection of elements of a single type.
 type ArrayDescriptor struct {
-	// ItemType describes the type of each element.
-	ItemType TypeDescriptor
+	itemType TypeDescriptor
 
-	// KeyExtractor, when non-empty, is the key chain specified in the '.skir'
-	// file after the pipe character. It identifies a property of ItemType that
+	// keyExtractor, when non-empty, is the key chain specified in the '.skir'
+	// file after the pipe character. It identifies a property of itemType that
 	// can be used for fast keyed lookup.
-	KeyExtractor string
+	keyExtractor string
 }
+
+// GetItemType returns the type descriptor for each array element.
+func (d *ArrayDescriptor) GetItemType() TypeDescriptor { return d.itemType }
+
+// GetKeyExtractor returns the key chain string, or empty if none.
+func (d *ArrayDescriptor) GetKeyExtractor() string { return d.keyExtractor }
 
 func (d *ArrayDescriptor) sealTypeDescriptor() {}
 func (d *ArrayDescriptor) AsJson() string      { return typeDescriptorToJson(d) }
@@ -185,15 +195,16 @@ type FieldOrVariant interface {
 
 // StructField describes a single field of a skir struct.
 type StructField struct {
-	Name   string
-	Number int
-	Type   TypeDescriptor
-	Doc    string
+	name      string
+	number    int
+	fieldType TypeDescriptor
+	doc       string
 }
 
-func (f *StructField) GetName() string { return f.Name }
-func (f *StructField) GetNumber() int  { return f.Number }
-func (f *StructField) GetDoc() string  { return f.Doc }
+func (f *StructField) GetName() string         { return f.name }
+func (f *StructField) GetNumber() int          { return f.number }
+func (f *StructField) GetType() TypeDescriptor { return f.fieldType }
+func (f *StructField) GetDoc() string          { return f.doc }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EnumVariant – sealed interface
@@ -212,14 +223,14 @@ type EnumVariant interface {
 
 // EnumConstantVariant describes a constant (non-wrapping) enum variant.
 type EnumConstantVariant struct {
-	Name   string
-	Number int
-	Doc    string
+	name   string
+	number int
+	doc    string
 }
 
-func (v *EnumConstantVariant) GetName() string  { return v.Name }
-func (v *EnumConstantVariant) GetNumber() int   { return v.Number }
-func (v *EnumConstantVariant) GetDoc() string   { return v.Doc }
+func (v *EnumConstantVariant) GetName() string  { return v.name }
+func (v *EnumConstantVariant) GetNumber() int   { return v.number }
+func (v *EnumConstantVariant) GetDoc() string   { return v.doc }
 func (v *EnumConstantVariant) sealEnumVariant() {}
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -228,16 +239,17 @@ func (v *EnumConstantVariant) sealEnumVariant() {}
 
 // EnumWrapperVariant describes an enum variant that wraps a value of another type.
 type EnumWrapperVariant struct {
-	Name   string
-	Number int
-	Type   TypeDescriptor
-	Doc    string
+	name        string
+	number      int
+	variantType TypeDescriptor
+	doc         string
 }
 
-func (v *EnumWrapperVariant) GetName() string  { return v.Name }
-func (v *EnumWrapperVariant) GetNumber() int   { return v.Number }
-func (v *EnumWrapperVariant) GetDoc() string   { return v.Doc }
-func (v *EnumWrapperVariant) sealEnumVariant() {}
+func (v *EnumWrapperVariant) GetName() string         { return v.name }
+func (v *EnumWrapperVariant) GetNumber() int          { return v.number }
+func (v *EnumWrapperVariant) GetType() TypeDescriptor { return v.variantType }
+func (v *EnumWrapperVariant) GetDoc() string          { return v.doc }
+func (v *EnumWrapperVariant) sealEnumVariant()        {}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RecordDescriptorBase
@@ -277,9 +289,9 @@ type StructDescriptor struct {
 	name           string
 	qualifiedName  string
 	modulePath     string
-	Doc            string
-	RemovedNumbers map[int]struct{}
-	Fields         []*StructField
+	doc            string
+	removedNumbers map[int]struct{}
+	fields         []*StructField
 
 	// Lazy lookup maps, initialised on first use.
 	once          sync.Once
@@ -296,9 +308,9 @@ func newStructDescriptor(modulePath, qualifiedName, doc string, removedNumbers m
 		name:           name,
 		qualifiedName:  qualifiedName,
 		modulePath:     modulePath,
-		Doc:            doc,
-		RemovedNumbers: removedNumbers,
-		Fields:         fields,
+		doc:            doc,
+		removedNumbers: removedNumbers,
+		fields:         fields,
 	}
 }
 
@@ -306,18 +318,19 @@ func (d *StructDescriptor) sealTypeDescriptor()                 {}
 func (d *StructDescriptor) GetName() string                     { return d.name }
 func (d *StructDescriptor) GetQualifiedName() string            { return d.qualifiedName }
 func (d *StructDescriptor) GetModulePath() string               { return d.modulePath }
-func (d *StructDescriptor) GetDoc() string                      { return d.Doc }
-func (d *StructDescriptor) GetRemovedNumbers() map[int]struct{} { return d.RemovedNumbers }
+func (d *StructDescriptor) GetDoc() string                      { return d.doc }
+func (d *StructDescriptor) GetRemovedNumbers() map[int]struct{} { return d.removedNumbers }
+func (d *StructDescriptor) GetFields() []*StructField           { return d.fields }
 func (d *StructDescriptor) recordId() string                    { return d.modulePath + ":" + d.qualifiedName }
 func (d *StructDescriptor) AsJson() string                      { return typeDescriptorToJson(d) }
 
 func (d *StructDescriptor) initLookups() {
 	d.once.Do(func() {
-		nm := make(map[string]*StructField, len(d.Fields))
-		num := make(map[int]*StructField, len(d.Fields))
-		for _, f := range d.Fields {
-			nm[f.Name] = f
-			num[f.Number] = f
+		nm := make(map[string]*StructField, len(d.fields))
+		num := make(map[int]*StructField, len(d.fields))
+		for _, f := range d.fields {
+			nm[f.name] = f
+			num[f.number] = f
 		}
 		d.nameToField = nm
 		d.numberToField = num
@@ -345,9 +358,9 @@ type EnumDescriptor struct {
 	name           string
 	qualifiedName  string
 	modulePath     string
-	Doc            string
-	RemovedNumbers map[int]struct{}
-	Variants       []EnumVariant
+	doc            string
+	removedNumbers map[int]struct{}
+	variants       []EnumVariant
 
 	// Lazy lookup maps, initialised on first use.
 	once            sync.Once
@@ -364,9 +377,9 @@ func newEnumDescriptor(modulePath, qualifiedName, doc string, removedNumbers map
 		name:           name,
 		qualifiedName:  qualifiedName,
 		modulePath:     modulePath,
-		Doc:            doc,
-		RemovedNumbers: removedNumbers,
-		Variants:       variants,
+		doc:            doc,
+		removedNumbers: removedNumbers,
+		variants:       variants,
 	}
 }
 
@@ -374,16 +387,17 @@ func (d *EnumDescriptor) sealTypeDescriptor()                 {}
 func (d *EnumDescriptor) GetName() string                     { return d.name }
 func (d *EnumDescriptor) GetQualifiedName() string            { return d.qualifiedName }
 func (d *EnumDescriptor) GetModulePath() string               { return d.modulePath }
-func (d *EnumDescriptor) GetDoc() string                      { return d.Doc }
-func (d *EnumDescriptor) GetRemovedNumbers() map[int]struct{} { return d.RemovedNumbers }
+func (d *EnumDescriptor) GetDoc() string                      { return d.doc }
+func (d *EnumDescriptor) GetRemovedNumbers() map[int]struct{} { return d.removedNumbers }
+func (d *EnumDescriptor) GetVariants() []EnumVariant          { return d.variants }
 func (d *EnumDescriptor) recordId() string                    { return d.modulePath + ":" + d.qualifiedName }
 func (d *EnumDescriptor) AsJson() string                      { return typeDescriptorToJson(d) }
 
 func (d *EnumDescriptor) initLookups() {
 	d.once.Do(func() {
-		nm := make(map[string]EnumVariant, len(d.Variants))
-		num := make(map[int]EnumVariant, len(d.Variants))
-		for _, v := range d.Variants {
+		nm := make(map[string]EnumVariant, len(d.variants))
+		num := make(map[int]EnumVariant, len(d.variants))
+		for _, v := range d.variants {
 			nm[v.GetName()] = v
 			num[v.GetNumber()] = v
 		}
@@ -427,9 +441,9 @@ func typeDescriptorToJson(td TypeDescriptor) string {
 		case *PrimitiveDescriptor:
 			// no record definitions
 		case *OptionalDescriptor:
-			addRecordDefinitions(v.OtherType)
+			addRecordDefinitions(v.otherType)
 		case *ArrayDescriptor:
-			addRecordDefinitions(v.ItemType)
+			addRecordDefinitions(v.itemType)
 		case *StructDescriptor:
 			rid := v.recordId()
 			if _, seen := recordIdToJson[rid]; seen {
@@ -440,8 +454,8 @@ func typeDescriptorToJson(td TypeDescriptor) string {
 			writeStructRecordJson(v, "    ", &sb)
 			recordIdToJson[rid] = sb.String()
 			order = append(order, rid)
-			for _, f := range v.Fields {
-				addRecordDefinitions(f.Type)
+			for _, f := range v.fields {
+				addRecordDefinitions(f.fieldType)
 			}
 		case *EnumDescriptor:
 			rid := v.recordId()
@@ -453,9 +467,9 @@ func typeDescriptorToJson(td TypeDescriptor) string {
 			writeEnumRecordJson(v, "    ", &sb)
 			recordIdToJson[rid] = sb.String()
 			order = append(order, rid)
-			for _, variant := range v.Variants {
+			for _, variant := range v.variants {
 				if w, ok := variant.(*EnumWrapperVariant); ok {
-					addRecordDefinitions(w.Type)
+					addRecordDefinitions(w.variantType)
 				}
 			}
 		}
@@ -490,41 +504,41 @@ func writeStructRecordJson(v *StructDescriptor, indent string, out *strings.Buil
 	out.WriteString(inner + "\"kind\": \"struct\",\n")
 	out.WriteString(inner + "\"id\": ")
 	writeJsonEscapedString(v.recordId(), out)
-	if v.Doc != "" {
+	if v.doc != "" {
 		out.WriteString(",\n")
 		out.WriteString(inner + "\"doc\": ")
-		writeJsonEscapedString(v.Doc, out)
+		writeJsonEscapedString(v.doc, out)
 	}
 	out.WriteString(",\n")
 	out.WriteString(inner + "\"fields\": [")
-	for i, f := range v.Fields {
+	for i, f := range v.fields {
 		if i > 0 {
 			out.WriteByte(',')
 		}
 		out.WriteString("\n")
 		out.WriteString(fieldIndent + "{\n")
 		out.WriteString(fieldBody + "\"name\": ")
-		writeJsonEscapedString(f.Name, out)
+		writeJsonEscapedString(f.name, out)
 		out.WriteString(",\n")
 		out.WriteString(fieldBody + "\"number\": ")
-		out.WriteString(strconv.Itoa(f.Number))
+		out.WriteString(strconv.Itoa(f.number))
 		out.WriteString(",\n")
 		out.WriteString(fieldBody + "\"type\": ")
-		typeSignatureToJson(f.Type, fieldBody, out)
-		if f.Doc != "" {
+		typeSignatureToJson(f.fieldType, fieldBody, out)
+		if f.doc != "" {
 			out.WriteString(",\n")
 			out.WriteString(fieldBody + "\"doc\": ")
-			writeJsonEscapedString(f.Doc, out)
+			writeJsonEscapedString(f.doc, out)
 		}
 		out.WriteString("\n")
 		out.WriteString(fieldIndent + "}")
 	}
-	if len(v.Fields) > 0 {
+	if len(v.fields) > 0 {
 		out.WriteString("\n")
 		out.WriteString(inner)
 	}
 	out.WriteString("]")
-	removedSlice := removedNumbersToSortedSlice(v.RemovedNumbers)
+	removedSlice := removedNumbersToSortedSlice(v.removedNumbers)
 	if len(removedSlice) > 0 {
 		out.WriteString(",\n")
 		out.WriteString(inner + "\"removed_numbers\": [")
@@ -554,15 +568,15 @@ func writeEnumRecordJson(v *EnumDescriptor, indent string, out *strings.Builder)
 	out.WriteString(inner + "\"kind\": \"enum\",\n")
 	out.WriteString(inner + "\"id\": ")
 	writeJsonEscapedString(v.recordId(), out)
-	if v.Doc != "" {
+	if v.doc != "" {
 		out.WriteString(",\n")
 		out.WriteString(inner + "\"doc\": ")
-		writeJsonEscapedString(v.Doc, out)
+		writeJsonEscapedString(v.doc, out)
 	}
 	out.WriteString(",\n")
 	out.WriteString(inner + "\"variants\": [")
-	sorted := make([]EnumVariant, len(v.Variants))
-	copy(sorted, v.Variants)
+	sorted := make([]EnumVariant, len(v.variants))
+	copy(sorted, v.variants)
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].GetNumber() < sorted[j].GetNumber()
 	})
@@ -580,7 +594,7 @@ func writeEnumRecordJson(v *EnumDescriptor, indent string, out *strings.Builder)
 		if w, ok := variant.(*EnumWrapperVariant); ok {
 			out.WriteString(",\n")
 			out.WriteString(variantBody + "\"type\": ")
-			typeSignatureToJson(w.Type, variantBody, out)
+			typeSignatureToJson(w.variantType, variantBody, out)
 		}
 		if variant.GetDoc() != "" {
 			out.WriteString(",\n")
@@ -595,7 +609,7 @@ func writeEnumRecordJson(v *EnumDescriptor, indent string, out *strings.Builder)
 		out.WriteString(inner)
 	}
 	out.WriteString("]")
-	removedSlice := removedNumbersToSortedSlice(v.RemovedNumbers)
+	removedSlice := removedNumbersToSortedSlice(v.removedNumbers)
 	if len(removedSlice) > 0 {
 		out.WriteString(",\n")
 		out.WriteString(inner + "\"removed_numbers\": [")
@@ -624,14 +638,14 @@ func typeSignatureToJson(td TypeDescriptor, indent string, out *strings.Builder)
 		out.WriteString("{\n")
 		out.WriteString(inner + "\"kind\": \"primitive\",\n")
 		out.WriteString(inner + "\"value\": \"")
-		out.WriteString(v.PrimitiveType.String())
+		out.WriteString(v.primitiveType.String())
 		out.WriteString("\"\n")
 		out.WriteString(indent + "}")
 	case *OptionalDescriptor:
 		out.WriteString("{\n")
 		out.WriteString(inner + "\"kind\": \"optional\",\n")
 		out.WriteString(inner + "\"value\": ")
-		typeSignatureToJson(v.OtherType, inner, out)
+		typeSignatureToJson(v.otherType, inner, out)
 		out.WriteString("\n")
 		out.WriteString(indent + "}")
 	case *ArrayDescriptor:
@@ -640,11 +654,11 @@ func typeSignatureToJson(td TypeDescriptor, indent string, out *strings.Builder)
 		out.WriteString(inner + "\"kind\": \"array\",\n")
 		out.WriteString(inner + "\"value\": {\n")
 		out.WriteString(valueIndent + "\"item\": ")
-		typeSignatureToJson(v.ItemType, valueIndent, out)
-		if v.KeyExtractor != "" {
+		typeSignatureToJson(v.itemType, valueIndent, out)
+		if v.keyExtractor != "" {
 			out.WriteString(",\n")
 			out.WriteString(valueIndent + "\"key_extractor\": ")
-			writeJsonEscapedString(v.KeyExtractor, out)
+			writeJsonEscapedString(v.keyExtractor, out)
 		}
 		out.WriteString("\n")
 		out.WriteString(inner + "}\n")
