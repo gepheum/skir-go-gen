@@ -1,4 +1,3 @@
-// 'You may pass nil' -> 'The parameter may be nil`
 // fooWrapper -> wrapFoo
 // Generate public symbols first, then internal...
 // Take a pass at all the code...
@@ -289,7 +288,7 @@ class GoSourceFileGenerator {
       this.push(
         commentify([
           docToCommentText(field.doc),
-          fieldType.kind === "optional" ? "You may pass nil." : "",
+          fieldType.kind === "optional" ? "The v parameter may be nil." : "",
         ]),
       );
       this.push(`Set${fieldName}(v ${goType}) ${returnType}\n`);
@@ -377,7 +376,7 @@ class GoSourceFileGenerator {
       this.push(
         commentify([
           docToCommentText(field.doc),
-          fieldType.kind === "optional" ? "You may pass nil." : "",
+          fieldType.kind === "optional" ? "The v parameter may be nil." : "",
         ]),
       );
       this.push(
@@ -707,7 +706,7 @@ class GoSourceFileGenerator {
         commentify([
           `${className}_${lowerName}Wrapper creates a '${variantName}' variant wrapping the given value.`,
           docToCommentText(variant.doc),
-          variantType.kind === "optional" ? "You may pass nil." : "",
+          variantType.kind === "optional" ? "The v parameter may be nil." : "",
         ]),
       );
       const implName = `_${className}_value_${lowerName}Wrapper`;
