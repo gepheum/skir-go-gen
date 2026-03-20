@@ -1,5 +1,3 @@
-// _arrayWrapper_FromSlice
-//   and for optional fields: SetField_Absent(), SetField_Present(...)
 // Put the Items_Search() method right after Items()...
 // Take a pass at all the code...
 // Reflection
@@ -207,6 +205,11 @@ class GoSourceFileGenerator {
         const itemType = typeSpeller.getGoType(fieldType.item);
         this.push(`Set${fieldName}(v []${itemType}) ${returnType}\n`);
         this.push(`Set${fieldName}_NoCopy(v ${paramType}) ${returnType}\n`);
+      } else if (fieldType.kind === "optional") {
+        this.push(`Set${fieldName}(v ${paramType}) ${returnType}\n`);
+        this.push(`Set${fieldName}_Absent() ${returnType}\n`);
+        const innerType = typeSpeller.getGoType(fieldType.other);
+        this.push(`Set${fieldName}_Present(v ${innerType}) ${returnType}\n`);
       } else {
         this.push(`Set${fieldName}(v ${paramType}) ${returnType}\n`);
       }
@@ -407,6 +410,26 @@ class GoSourceFileGenerator {
         this.writeBuilderSetterBody(field, fieldAccess, "v");
         this.push("  return b\n");
         this.push("}\n\n");
+      } else if (fieldType.kind === "optional") {
+        this.push(
+          `func (b *${builderName}) Set${fieldName}(v ${paramType}) ${returnType} {\n`,
+        );
+        this.writeBuilderSetterBody(field, fieldAccess, "v");
+        this.push("  return b\n");
+        this.push("}\n\n");
+        this.push(
+          `func (b *${builderName}) Set${fieldName}_Absent() ${returnType} {\n`,
+        );
+        this.push(
+          `  return b.Set${fieldName}(skir_client.Optional[${typeSpeller.getGoType(fieldType.other)}]{})\n`,
+        );
+        this.push("}\n\n");
+        const innerType = typeSpeller.getGoType(fieldType.other);
+        this.push(
+          `func (b *${builderName}) Set${fieldName}_Present(v ${innerType}) ${returnType} {\n`,
+        );
+        this.push(`  return b.Set${fieldName}(skir_client.OptionalOf(v))\n`);
+        this.push("}\n\n");
       } else {
         this.push(
           `func (b *${builderName}) Set${fieldName}(v ${paramType}) ${returnType} {\n`,
@@ -450,6 +473,26 @@ class GoSourceFileGenerator {
         );
         this.writeBuilderSetterBody(field, fieldAccess, "v");
         this.push("  return b\n");
+        this.push("}\n\n");
+      } else if (fieldType.kind === "optional") {
+        this.push(
+          `func (b *${builderTypeName}) Set${fieldName}(v ${paramType}) *${builderTypeName} {\n`,
+        );
+        this.writeBuilderSetterBody(field, fieldAccess, "v");
+        this.push("  return b\n");
+        this.push("}\n\n");
+        this.push(
+          `func (b *${builderTypeName}) Set${fieldName}_Absent() *${builderTypeName} {\n`,
+        );
+        this.push(
+          `  return b.Set${fieldName}(skir_client.Optional[${typeSpeller.getGoType(fieldType.other)}]{})\n`,
+        );
+        this.push("}\n\n");
+        const innerType = typeSpeller.getGoType(fieldType.other);
+        this.push(
+          `func (b *${builderTypeName}) Set${fieldName}_Present(v ${innerType}) *${builderTypeName} {\n`,
+        );
+        this.push(`  return b.Set${fieldName}(skir_client.OptionalOf(v))\n`);
         this.push("}\n\n");
       } else {
         this.push(

@@ -1,8 +1,3 @@
-// Package skir_client provides the reflection/introspection types for skir schemas.
-//
-// A TypeDescriptor describes a skir type (primitive, optional, array, struct or enum)
-// and can serialize itself to a self-contained JSON representation, as well as be
-// reconstructed from such a representation via ParseTypeDescriptorFromJson.
 package skir_client
 
 import (
