@@ -648,9 +648,9 @@ func TestStatus_Accept(t *testing.T) {
 
 type statusNameVisitor struct{}
 
-func (v *statusNameVisitor) OnUnknown() string                           { return "unknown" }
-func (v *statusNameVisitor) OnOkConst() string                           { return "ok" }
-func (v *statusNameVisitor) OnErrorWrapper(e *enums.Status_Error) string { return "error" }
+func (v *statusNameVisitor) OnUnknown() string                          { return "unknown" }
+func (v *statusNameVisitor) OnOkConst() string                          { return "ok" }
+func (v *statusNameVisitor) OnErrorWrapper(e enums.Status_Error) string { return "error" }
 
 // =============================================================================
 // Status_Error (struct nested inside Status)
@@ -863,8 +863,8 @@ func TestEnumWithStructField_Accept(t *testing.T) {
 
 type enumWithStructFieldVisitor struct{}
 
-func (v *enumWithStructFieldVisitor) OnUnknown() string                                { return "unknown" }
-func (v *enumWithStructFieldVisitor) OnSWrapper(s *enums.EnumWithStructField_S) string { return "s" }
+func (v *enumWithStructFieldVisitor) OnUnknown() string                               { return "unknown" }
+func (v *enumWithStructFieldVisitor) OnSWrapper(s enums.EnumWithStructField_S) string { return "s" }
 
 // =============================================================================
 // Kind (constants: BAR, FOO + wrappers: createOption, kind, wrapOption)
@@ -968,11 +968,11 @@ type kindNameVisitor struct{}
 func (v *kindNameVisitor) OnUnknown() string  { return "unknown" }
 func (v *kindNameVisitor) OnBarConst() string { return "bar" }
 func (v *kindNameVisitor) OnFooConst() string { return "foo" }
-func (v *kindNameVisitor) OnCreateOptionWrapper(o *enums.Kind_WrapOption) string {
+func (v *kindNameVisitor) OnCreateOptionWrapper(o enums.Kind_WrapOption) string {
 	return "createOption"
 }
-func (v *kindNameVisitor) OnKindWrapper(k enums.Kind_Kind) string              { return "kind" }
-func (v *kindNameVisitor) OnWrapOptionWrapper(o *enums.Kind_WrapOption) string { return "wrapOption" }
+func (v *kindNameVisitor) OnKindWrapper(k enums.Kind_Kind) string             { return "kind" }
+func (v *kindNameVisitor) OnWrapOptionWrapper(o enums.Kind_WrapOption) string { return "wrapOption" }
 
 // =============================================================================
 // Kind_Kind (enum wrapping a bool under "kind")

@@ -18,11 +18,11 @@ type internalFieldEntry[T, Builder any] interface {
 	entryNumber() int
 	entryDoc() string
 	entryType() TypeDescriptor
-	isEntryDefault(frozen *T) bool
-	entryToJson(frozen *T, eolIndent *string, out *strings.Builder)
-	setEntryFromJson(mutable Builder, v fastjson.Value, keepUnrecognized bool) error
-	encodeEntry(frozen *T, out *binaryOutput)
-	decodeEntry(mutable Builder, in *binaryInput, keepUnrecognized bool)
+	isEntryDefault(frozen T) bool
+	entryToJson(frozen T, eolIndent *string, out *strings.Builder)
+	setEntryFromJson(builder Builder, v fastjson.Value, keepUnrecognized bool) error
+	encodeEntry(frozen T, out *binaryOutput)
+	decodeEntry(builder Builder, in *binaryInput, keepUnrecognized bool)
 }
 
 type typedField[T, Builder, V any] struct {
@@ -30,7 +30,7 @@ type typedField[T, Builder, V any] struct {
 	number  int
 	doc     string
 	adapter typeAdapter[V]
-	getter  func(*T) *V
+	getter  func(T) V
 	setter  func(Builder, V)
 }
 
@@ -39,33 +39,33 @@ func (f *typedField[T, Builder, V]) entryNumber() int          { return f.number
 func (f *typedField[T, Builder, V]) entryDoc() string          { return f.doc }
 func (f *typedField[T, Builder, V]) entryType() TypeDescriptor { return f.adapter.typeDescriptor() }
 
-func (f *typedField[T, Builder, V]) isEntryDefault(frozen *T) bool {
+func (f *typedField[T, Builder, V]) isEntryDefault(frozen T) bool {
 	v := f.getter(frozen)
 	return f.adapter.isDefault(v)
 }
 
-func (f *typedField[T, Builder, V]) entryToJson(frozen *T, eolIndent *string, out *strings.Builder) {
+func (f *typedField[T, Builder, V]) entryToJson(frozen T, eolIndent *string, out *strings.Builder) {
 	v := f.getter(frozen)
 	f.adapter.toJson(v, eolIndent, out)
 }
 
-func (f *typedField[T, Builder, V]) setEntryFromJson(mutable Builder, fv fastjson.Value, keepUnrecognized bool) error {
+func (f *typedField[T, Builder, V]) setEntryFromJson(builder Builder, fv fastjson.Value, keepUnrecognized bool) error {
 	v, err := f.adapter.fromJson(fv, keepUnrecognized)
 	if err != nil {
 		return err
 	}
-	f.setter(mutable, v)
+	f.setter(builder, v)
 	return nil
 }
 
-func (f *typedField[T, Builder, V]) encodeEntry(frozen *T, out *binaryOutput) {
+func (f *typedField[T, Builder, V]) encodeEntry(frozen T, out *binaryOutput) {
 	v := f.getter(frozen)
 	f.adapter.encode(v, out)
 }
 
-func (f *typedField[T, Builder, V]) decodeEntry(mutable Builder, in *binaryInput, keepUnrecognized bool) {
+func (f *typedField[T, Builder, V]) decodeEntry(builder Builder, in *binaryInput, keepUnrecognized bool) {
 	v, _ := f.adapter.decode(in, keepUnrecognized)
-	f.setter(mutable, v)
+	f.setter(builder, v)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -81,14 +81,15 @@ func (f *typedField[T, Builder, V]) decodeEntry(mutable Builder, in *binaryInput
 // Usage: call NewStructAdapter, then AddField / AddRemovedNumber for each
 // field, then Finalize before using the adapter.
 type Internal__StructAdapter[T any, Builder any] struct {
-	defaultInstance       *T
-	newMutable            func() Builder
-	toFrozen              func(Builder) T
-	modulePath            string
-	qualifiedName         string
-	docString             string
-	getUnrecognizedFields func(*T) *Internal__UnrecognizedFields
-	setUnrecognizedFields func(Builder, *Internal__UnrecognizedFields)
+	defaultInstance   T
+	isDefaultInstance func(T) bool
+	newBuilder        func() Builder
+	build             func(Builder) T
+	modulePath        string
+	qualifiedName     string
+	docString         string
+	getUnrecognized   func(T) *Internal__UnrecognizedFields
+	setUnrecognized   func(Builder, *Internal__UnrecognizedFields)
 
 	orderedEntries []internalFieldEntry[T, Builder] // sorted by number after Finalize
 	nameToEntry    map[string]internalFieldEntry[T, Builder]
@@ -104,25 +105,27 @@ type Internal__StructAdapter[T any, Builder any] struct {
 // Call AddField / AddRemovedNumber for each field and removed number,
 // then Finalize before using the adapter.
 func Internal__NewStructAdapter[T, Builder any](
-	defaultInstance *T,
-	newMutable func() Builder,
-	toFrozen func(Builder) T,
+	defaultInstance T,
+	isDefaultInstance func(T) bool,
+	newBuilder func() Builder,
+	build func(Builder) T,
 	modulePath, qualifiedName, doc string,
-	getUnrecognizedFields func(*T) *Internal__UnrecognizedFields,
-	setUnrecognizedFields func(Builder, *Internal__UnrecognizedFields),
+	getUnrecognized func(T) *Internal__UnrecognizedFields,
+	setUnrecognized func(Builder, *Internal__UnrecognizedFields),
 ) *Internal__StructAdapter[T, Builder] {
 	a := &Internal__StructAdapter[T, Builder]{
-		defaultInstance:       defaultInstance,
-		newMutable:            newMutable,
-		toFrozen:              toFrozen,
-		modulePath:            modulePath,
-		qualifiedName:         qualifiedName,
-		docString:             doc,
-		getUnrecognizedFields: getUnrecognizedFields,
-		setUnrecognizedFields: setUnrecognizedFields,
-		nameToEntry:           make(map[string]internalFieldEntry[T, Builder]),
-		removedNumbers:        make(map[int]struct{}),
-		maxNumber:             -1,
+		defaultInstance:   defaultInstance,
+		isDefaultInstance: isDefaultInstance,
+		newBuilder:        newBuilder,
+		build:             build,
+		modulePath:        modulePath,
+		qualifiedName:     qualifiedName,
+		docString:         doc,
+		getUnrecognized:   getUnrecognized,
+		setUnrecognized:   setUnrecognized,
+		nameToEntry:       make(map[string]internalFieldEntry[T, Builder]),
+		removedNumbers:    make(map[int]struct{}),
+		maxNumber:         -1,
 	}
 	// Initialize the descriptor immediately so typeDescriptor() returns a valid
 	// non-nil pointer even before Finalize is called. This lets recursive fields
@@ -143,7 +146,7 @@ func Internal__AddField[T, Builder, V any](
 	number int,
 	ser Serializer[V],
 	doc string,
-	getter func(*T) *V,
+	getter func(T) V,
 	setter func(Builder, V),
 ) {
 	if a.finalized {
@@ -214,11 +217,11 @@ func (a *Internal__StructAdapter[T, Builder]) Finalize() {
 // typeAdapter[T] implementation
 // ─────────────────────────────────────────────────────────────────────────────
 
-func (a *Internal__StructAdapter[T, Builder]) isDefault(value *T) bool {
-	if value == a.defaultInstance {
+func (a *Internal__StructAdapter[T, Builder]) isDefault(value T) bool {
+	if a.isDefaultInstance(value) {
 		return true
 	}
-	if a.getUnrecognizedFields(value) != nil {
+	if a.getUnrecognized(value) != nil {
 		return false
 	}
 	for _, e := range a.orderedEntries {
@@ -229,7 +232,7 @@ func (a *Internal__StructAdapter[T, Builder]) isDefault(value *T) bool {
 	return true
 }
 
-func (a *Internal__StructAdapter[T, Builder]) toJson(input *T, eolIndent *string, out *strings.Builder) {
+func (a *Internal__StructAdapter[T, Builder]) toJson(input T, eolIndent *string, out *strings.Builder) {
 	if eolIndent != nil {
 		a.toReadableJson(input, eolIndent, out)
 	} else {
@@ -242,8 +245,8 @@ func (a *Internal__StructAdapter[T, Builder]) toJson(input *T, eolIndent *string
 // unless the struct carries unrecognized fields from a newer schema version, in
 // which case all recognised slots are written followed by the stored unrecognized
 // JSON elements.
-func (a *Internal__StructAdapter[T, Builder]) toDenseJson(input *T, out *strings.Builder) {
-	unrecognized := a.getUnrecognizedFields(input)
+func (a *Internal__StructAdapter[T, Builder]) toDenseJson(input T, out *strings.Builder) {
+	unrecognized := a.getUnrecognized(input)
 	out.WriteByte('[')
 	if unrecognized != nil && unrecognized.jsonElements != nil {
 		// Write all recognised slots, then append the stored unrecognized elements.
@@ -282,7 +285,7 @@ func (a *Internal__StructAdapter[T, Builder]) toDenseJson(input *T, out *strings
 }
 
 // toReadableJson writes input as a JSON object, omitting default fields.
-func (a *Internal__StructAdapter[T, Builder]) toReadableJson(input *T, eolIndent *string, out *strings.Builder) {
+func (a *Internal__StructAdapter[T, Builder]) toReadableJson(input T, eolIndent *string, out *strings.Builder) {
 	out.WriteByte('{')
 	childIndent := *eolIndent + "  "
 	first := true
@@ -307,7 +310,7 @@ func (a *Internal__StructAdapter[T, Builder]) toReadableJson(input *T, eolIndent
 
 // getSlotCount returns the number of slots needed to encode input:
 // the field number of the last non-default field + 1, or 0 if all are default.
-func (a *Internal__StructAdapter[T, Builder]) getSlotCount(input *T) int {
+func (a *Internal__StructAdapter[T, Builder]) getSlotCount(input T) int {
 	for i := len(a.orderedEntries) - 1; i >= 0; i-- {
 		if !a.orderedEntries[i].isEntryDefault(input) {
 			return a.orderedEntries[i].entryNumber() + 1
@@ -320,22 +323,22 @@ func (a *Internal__StructAdapter[T, Builder]) fromJson(v fastjson.Value, keepUnr
 	switch v.Type() {
 	case fastjson.TypeNumber:
 		// Dense default: 0 → return default instance.
-		return *a.defaultInstance, nil
+		return a.defaultInstance, nil
 	case fastjson.TypeArray:
 		return a.fromDenseJson(v, keepUnrecognized)
 	case fastjson.TypeObject:
 		return a.fromReadableJson(v)
 	default:
-		return *a.defaultInstance, nil
+		return a.defaultInstance, nil
 	}
 }
 
 func (a *Internal__StructAdapter[T, Builder]) fromDenseJson(arr fastjson.Value, keepUnrecognized bool) (T, error) {
 	items, err := arr.Array()
 	if err != nil {
-		return *a.defaultInstance, err
+		return a.defaultInstance, err
 	}
-	mutable := a.newMutable()
+	builder := a.newBuilder()
 	recognizedCount := len(a.slotToEntry)
 	numSlotsToFill := len(items)
 	if numSlotsToFill > recognizedCount {
@@ -344,7 +347,10 @@ func (a *Internal__StructAdapter[T, Builder]) fromDenseJson(arr fastjson.Value, 
 			extraItems := items[recognizedCount:]
 			jsonElements := make([]*fastjson.Value, len(extraItems))
 			copy(jsonElements, extraItems)
-			a.setUnrecognizedFields(mutable, Internal__NewUnrecognizedFieldsFromJson(len(items), jsonElements))
+			a.setUnrecognized(
+				builder,
+				Internal__NewUnrecognizedFieldsFromJson(len(items), jsonElements),
+			)
 		}
 		numSlotsToFill = recognizedCount
 	}
@@ -353,18 +359,18 @@ func (a *Internal__StructAdapter[T, Builder]) fromDenseJson(arr fastjson.Value, 
 		if n >= numSlotsToFill {
 			break
 		}
-		if err := e.setEntryFromJson(mutable, *items[n], keepUnrecognized); err != nil {
-			return *a.defaultInstance, err
+		if err := e.setEntryFromJson(builder, *items[n], keepUnrecognized); err != nil {
+			return a.defaultInstance, err
 		}
 	}
-	return a.toFrozen(mutable), nil
+	return a.build(builder), nil
 }
 
 func (a *Internal__StructAdapter[T, Builder]) fromReadableJson(obj fastjson.Value) (T, error) {
-	mutable := a.newMutable()
+	builder := a.newBuilder()
 	jsonObj, err := obj.Object()
 	if err != nil {
-		return *a.defaultInstance, err
+		return a.defaultInstance, err
 	}
 	var visitErr error
 	jsonObj.Visit(func(key []byte, v *fastjson.Value) {
@@ -372,17 +378,17 @@ func (a *Internal__StructAdapter[T, Builder]) fromReadableJson(obj fastjson.Valu
 			return
 		}
 		if e := a.nameToEntry[string(key)]; e != nil {
-			visitErr = e.setEntryFromJson(mutable, *v, false)
+			visitErr = e.setEntryFromJson(builder, *v, false)
 		}
 	})
 	if visitErr != nil {
-		return *a.defaultInstance, visitErr
+		return a.defaultInstance, visitErr
 	}
-	return a.toFrozen(mutable), nil
+	return a.build(builder), nil
 }
 
-func (a *Internal__StructAdapter[T, Builder]) encode(input *T, out *binaryOutput) {
-	unrecognized := a.getUnrecognizedFields(input)
+func (a *Internal__StructAdapter[T, Builder]) encode(input T, out *binaryOutput) {
+	unrecognized := a.getUnrecognized(input)
 	var totalSlotCount int
 	var recognizedSlotCount int
 	var unrecognizedBytes []byte
@@ -417,9 +423,9 @@ func (a *Internal__StructAdapter[T, Builder]) encode(input *T, out *binaryOutput
 func (a *Internal__StructAdapter[T, Builder]) decode(in *binaryInput, keepUnrecognized bool) (T, error) {
 	wire := in.readUint8()
 	if wire == 0 || wire == 246 {
-		return *a.defaultInstance, nil
+		return a.defaultInstance, nil
 	}
-	mutable := a.newMutable()
+	builder := a.newBuilder()
 	var encodedSlotCount int
 	if wire == 250 {
 		encodedSlotCount = int(decodeNumber(in))
@@ -433,7 +439,7 @@ func (a *Internal__StructAdapter[T, Builder]) decode(in *binaryInput, keepUnreco
 	}
 	for i := 0; i < slotsToFill; i++ {
 		if a.slotToEntry[i] != nil {
-			a.slotToEntry[i].decodeEntry(mutable, in, keepUnrecognized)
+			a.slotToEntry[i].decodeEntry(builder, in, keepUnrecognized)
 		} else {
 			skipValue(in) // removed field
 		}
@@ -448,14 +454,14 @@ func (a *Internal__StructAdapter[T, Builder]) decode(in *binaryInput, keepUnreco
 			}
 			unrecognizedBytes := make([]byte, in.offset-start)
 			copy(unrecognizedBytes, in.data[start:in.offset])
-			a.setUnrecognizedFields(mutable, Internal__NewUnrecognizedFieldsFromBytes(encodedSlotCount, unrecognizedBytes))
+			a.setUnrecognized(builder, Internal__NewUnrecognizedFieldsFromBytes(encodedSlotCount, unrecognizedBytes))
 		} else {
 			for i := recognizedCount; i < encodedSlotCount; i++ {
 				skipValue(in)
 			}
 		}
 	}
-	return a.toFrozen(mutable), nil
+	return a.build(builder), nil
 }
 
 func (a *Internal__StructAdapter[T, Builder]) typeDescriptor() TypeDescriptor {

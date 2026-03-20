@@ -28,7 +28,7 @@ export class TypeSpeller {
       }
       case "optional": {
         const otherType = this.getGoType(type.other);
-        return `*${otherType}`;
+        return `skir_client.Optional[${otherType}]`;
       }
       case "primitive": {
         const { primitive } = type;

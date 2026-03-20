@@ -143,7 +143,7 @@ type enumWrapperEntry[T, V any] struct {
 	kindOrd  int
 	adapter  typeAdapter[V]
 	wrap     func(V) T
-	getValue func(T) *V
+	getValue func(T) V
 }
 
 func (e *enumWrapperEntry[T, V]) anyEntryNumber() int     { return e.n }
@@ -303,7 +303,7 @@ func Internal__AddWrapperVariant[T, V any](
 	ser Serializer[V],
 	doc string,
 	wrap func(V) T,
-	getValue func(T) *V,
+	getValue func(T) V,
 ) {
 	if a.finalized {
 		panic("skir_client: AddWrapperVariant called after Finalize")
@@ -357,13 +357,13 @@ func (a *Internal__EnumAdapter[T]) Finalize() {
 // typeAdapter[T] implementation
 // ─────────────────────────────────────────────────────────────────────────────
 
-func (a *Internal__EnumAdapter[T]) isDefault(value *T) bool {
-	return a.getKindOrdinal(*value) == 0
+func (a *Internal__EnumAdapter[T]) isDefault(value T) bool {
+	return a.getKindOrdinal(value) == 0
 }
 
-func (a *Internal__EnumAdapter[T]) toJson(input *T, eolIndent *string, out *strings.Builder) {
-	kindOrd := a.getKindOrdinal(*input)
-	a.kindOrdinalToEntry[kindOrd].variantEntryToJson(*input, eolIndent, out)
+func (a *Internal__EnumAdapter[T]) toJson(input T, eolIndent *string, out *strings.Builder) {
+	kindOrd := a.getKindOrdinal(input)
+	a.kindOrdinalToEntry[kindOrd].variantEntryToJson(input, eolIndent, out)
 }
 
 func (a *Internal__EnumAdapter[T]) fromJson(v fastjson.Value, keepUnrecognized bool) (T, error) {
@@ -472,9 +472,9 @@ func (a *Internal__EnumAdapter[T]) resolveConstantLookup(number int, keepUnrecog
 	return varEntry.variantEntryConstant(), nil
 }
 
-func (a *Internal__EnumAdapter[T]) encode(input *T, out *binaryOutput) {
-	kindOrd := a.getKindOrdinal(*input)
-	a.kindOrdinalToEntry[kindOrd].variantEntryEncode(*input, out)
+func (a *Internal__EnumAdapter[T]) encode(input T, out *binaryOutput) {
+	kindOrd := a.getKindOrdinal(input)
+	a.kindOrdinalToEntry[kindOrd].variantEntryEncode(input, out)
 }
 
 func (a *Internal__EnumAdapter[T]) decode(in *binaryInput, keepUnrecognized bool) (T, error) {

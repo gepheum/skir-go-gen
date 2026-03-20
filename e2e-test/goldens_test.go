@@ -128,15 +128,15 @@ func evaluateTypedValue(tv goldens.TypedValue) (typedValueResult, error) {
 	case goldens.TypedValue_kind_intsWrapper:
 		return newTypedValueResult(tv.UnwrapInts(), skir_client.ArraySerializer(skir_client.Int32Serializer())), nil
 	case goldens.TypedValue_kind_pointWrapper:
-		return newTypedValueResult(*tv.UnwrapPoint(), goldens.Point_serializer()), nil
+		return newTypedValueResult(tv.UnwrapPoint(), goldens.Point_serializer()), nil
 	case goldens.TypedValue_kind_colorWrapper:
-		return newTypedValueResult(*tv.UnwrapColor(), goldens.Color_serializer()), nil
+		return newTypedValueResult(tv.UnwrapColor(), goldens.Color_serializer()), nil
 	case goldens.TypedValue_kind_myEnumWrapper:
 		return newTypedValueResult(tv.UnwrapMyEnum(), goldens.MyEnum_serializer()), nil
 	case goldens.TypedValue_kind_keyedArraysWrapper:
-		return newTypedValueResult(*tv.UnwrapKeyedArrays(), goldens.KeyedArrays_serializer()), nil
+		return newTypedValueResult(tv.UnwrapKeyedArrays(), goldens.KeyedArrays_serializer()), nil
 	case goldens.TypedValue_kind_recStructWrapper:
-		return newTypedValueResult(*tv.UnwrapRecStruct(), goldens.RecStruct_serializer()), nil
+		return newTypedValueResult(tv.UnwrapRecStruct(), goldens.RecStruct_serializer()), nil
 	case goldens.TypedValue_kind_recEnumWrapper:
 		return newTypedValueResult(tv.UnwrapRecEnum(), goldens.RecEnum_serializer()), nil
 
@@ -239,7 +239,7 @@ func evaluateTypedValue(tv goldens.TypedValue) (typedValueResult, error) {
 	}
 }
 
-func reserializeValueAndVerify(t *testing.T, input *goldens.Assertion_ReserializeValue) {
+func reserializeValueAndVerify(t *testing.T, input goldens.Assertion_ReserializeValue) {
 	t.Helper()
 	res, err := evaluateTypedValue(input.Value())
 	if err != nil {
@@ -248,9 +248,9 @@ func reserializeValueAndVerify(t *testing.T, input *goldens.Assertion_Reserializ
 	}
 
 	// Check expected type descriptor.
-	if td := input.ExpectedTypeDescriptor(); td != nil {
-		if got := res.typeDescriptorJson(); got != *td {
-			t.Errorf("type descriptor:\n  got:      %s\n  expected: %s", got, *td)
+	if td := input.ExpectedTypeDescriptor(); td.IsPresent() {
+		if got := res.typeDescriptorJson(); got != td.Get() {
+			t.Errorf("type descriptor:\n  got:      %s\n  expected: %s", got, td.Get())
 		}
 	}
 
@@ -338,7 +338,7 @@ func reserializeValueAndVerify(t *testing.T, input *goldens.Assertion_Reserializ
 	}
 }
 
-func reserializeLargeStringAndVerify(t *testing.T, input *goldens.Assertion_ReserializeLargeString) {
+func reserializeLargeStringAndVerify(t *testing.T, input goldens.Assertion_ReserializeLargeString) {
 	t.Helper()
 	str := strings.Repeat("a", int(input.NumChars()))
 	s := skir_client.StringSerializer()
@@ -367,7 +367,7 @@ func reserializeLargeStringAndVerify(t *testing.T, input *goldens.Assertion_Rese
 	}
 }
 
-func reserializeLargeArrayAndVerify(t *testing.T, input *goldens.Assertion_ReserializeLargeArray) {
+func reserializeLargeArrayAndVerify(t *testing.T, input goldens.Assertion_ReserializeLargeArray) {
 	t.Helper()
 	n := int(input.NumItems())
 	elems := make([]int32, n)

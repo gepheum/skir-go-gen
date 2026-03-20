@@ -29,7 +29,7 @@ func (s Serializer[T]) ToJson(v T, flavor ...Readable) string {
 		i := "\n"
 		eolIndent = &i
 	}
-	s.adapter.toJson(&v, eolIndent, &out)
+	s.adapter.toJson(v, eolIndent, &out)
 	return out.String()
 }
 
@@ -45,7 +45,7 @@ func (s Serializer[T]) FromJson(code string, opts ...KeepUnrecognizedValues) (T,
 func (s Serializer[T]) ToBytes(v T) []byte {
 	out := binaryOutput{}
 	out.out.WriteString("skir")
-	s.adapter.encode(&v, &out)
+	s.adapter.encode(v, &out)
 	return out.out.Bytes()
 }
 
@@ -70,13 +70,13 @@ func (s Serializer[T]) TypeDescriptor() TypeDescriptor {
 // (primitive, array, optional, struct, enum). It is unexported so that only
 // adapters defined inside this package can satisfy it.
 type typeAdapter[T any] interface {
-	isDefault(value *T) bool
+	isDefault(value T) bool
 	// toJson writes the JSON representation of input to out.
 	// eolIndent is nil for dense (compact) mode; in readable mode it is
 	// "\n" followed by the indentation of the current nesting level.
-	toJson(input *T, eolIndent *string, out *strings.Builder)
+	toJson(input T, eolIndent *string, out *strings.Builder)
 	fromJson(json fastjson.Value, keepUnrecognizedValues bool) (T, error)
-	encode(input *T, out *binaryOutput)
+	encode(input T, out *binaryOutput)
 	decode(in *binaryInput, keepUnrecognizedValues bool) (T, error)
 	typeDescriptor() TypeDescriptor
 }

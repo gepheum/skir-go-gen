@@ -1,5 +1,12 @@
-// So I'm actually not sure that Array is immutable...  Because At returns a pointer, apparently it can be modified....
-//   Same for pointers returned in struct: yikes!!!
+// I think I may be usign unknown instead of unrecognized in enum for some variant?
+// Make strict builder return a pointer to the held value??? Or is that dangerous? Is it possibe to hold a pointer to the old pointer at an unfinished state and then reset the value? I think so... SO maybe what I have is good, safer.
+// For indexed arrays, rename finder to FIeldName_Search?
+//   Make it return an Optional? It cannot return a pointet to the element!
+// nit: In TypeAdapter, naming consistency of params (input vs value)
+// nit: in 'serializers', why do the adapter methods expect a pointer?
+// nit: format skir_client better by breaking lines at long param lists
+// Review Optional interface
+//   Rm valueOrDefault, just add ValueOr
 // _arrayWrapper_FromSlice
 //   Or actually: arrayWrapper(slice); arrayWrapper_NoCopy(slice)
 // Generate public symbols first, then internal...
@@ -7,7 +14,6 @@
 // RPC code
 // Reflection
 // Generate doc
-// Golden tests
 // set up CI
 
 import {
@@ -156,18 +162,49 @@ class GoSourceFileGenerator {
     );
     const className = getClassName(struct);
 
-    // Define the frozen struct.
+    // Helper: for a field, determine getterName and return type in the interface.
+    // Struct fields: return the interface type (not a pointer).
+    // Optional fields: return skir_client.Optional[T].
+    const getInterfaceReturnType = (field: (typeof fields)[0]): string => {
+      const ft = field.type!;
+      if (ft.kind === "optional") {
+        return `skir_client.Optional[${typeSpeller.getGoType(ft.other)}]`;
+      }
+      return typeSpeller.getGoType(ft);
+    };
+
+    // Define the interface.
     this.push(
       commentify([docToCommentText(struct.record.doc), "Deeply immutable."]),
     );
-    this.push(`type ${className} struct {\n`);
+    this.push(`type ${className} interface {\n`);
+    for (const field of fields) {
+      const getterName = structFieldToGetterName(field);
+      this.push(`${getterName}() ${getInterfaceReturnType(field)}\n`);
+    }
+    // Search methods for keyed array fields belong in the interface too.
+    for (const field of fields) {
+      const keyedArrayHelper = this.getKeyedArrayHelper(field.type!);
+      if (!keyedArrayHelper) continue;
+      const fieldName = convertCase(field.name.text, "UpperCamel");
+      const { exposedKeyType, itemType } = keyedArrayHelper;
+      this.push(
+        `Search${fieldName}(k ${exposedKeyType}) skir_client.Optional[${itemType}]\n`,
+      );
+    }
+    this.push(`ToBuilder() *${className}_partialBuilderType\n`);
+    this.push(`String() string\n`);
+    this.push(`unrecognized() *skir_client.Internal__UnrecognizedFields\n`);
+    this.push(`isDefaultInstance() bool\n`);
+    this.push("}\n\n");
+
+    // Define the _impl struct.
+    this.push(`type _${className}_impl struct {\n`);
     for (const field of fields) {
       const fieldName = "_" + convertCase(field.name.text, "lowerCamel");
-      const fieldType = field.type!;
-      const goType = typeSpeller.getGoType(fieldType);
-      const maybeStar = field.isRecursive === "hard" ? "*" : "";
-      this.push(`${fieldName} ${maybeStar}${goType}\n`);
-      const keyedArrayHelper = this.getKeyedArrayHelper(fieldType);
+      const goType = typeSpeller.getGoType(field.type!);
+      this.push(`${fieldName} ${goType}\n`);
+      const keyedArrayHelper = this.getKeyedArrayHelper(field.type!);
       if (keyedArrayHelper) {
         const { mapType } = keyedArrayHelper;
         this.push(`${fieldName}_indexed *atomic.Pointer[${mapType}]\n`);
@@ -176,53 +213,45 @@ class GoSourceFileGenerator {
     this.push(`__unrecognized *skir_client.Internal__UnrecognizedFields\n`);
     this.push("}\n\n");
 
-    // Write the getters.
+    // Write the getters on *_${className}_impl.
     for (const field of fields) {
-      const fieldName = structFieldToGetterName(field);
-      const goType = typeSpeller.getGoType(field.type!);
-      const type = field.type!;
-      const isStructType = this.isStructType(type);
+      const getterName = structFieldToGetterName(field);
+      const ft = field.type!;
       const fieldAccess = "s._" + convertCase(field.name.text, "lowerCamel");
-      const returnType = isStructType ? `*${goType}` : goType;
-      this.push(
-        commentify([
-          docToCommentText(field.doc),
-          isStructType
-            ? "The return value is never nil."
-            : type.kind === "optional"
-              ? "The return value may be nil."
-              : "",
-        ]),
-      );
-      this.push(`func (s *${className}) ${fieldName}() ${returnType} {\n`);
-      if (field.isRecursive === "hard") {
-        // Stored as *GoType; return directly.
-        if (type.kind !== "record") {
-          throw new TypeError();
-        }
-        const otherRecord = typeSpeller.recordMap.get(type.key)!;
+      const retType = getInterfaceReturnType(field);
+      this.push(`func (s *_${className}_impl) ${getterName}() ${retType} {\n`);
+      if (this.isStructType(ft) && field.isRecursive === "hard") {
+        // Interface field, nil = default
+        const otherRecord = typeSpeller.recordMap.get(
+          (ft as { kind: "record"; key: RecordKey }).key,
+        )!;
         const otherClassName = getClassName(otherRecord);
-        this.push(`maybeRet := ${fieldAccess}\n`);
-        this.push("if maybeRet != nil {\n");
-        this.push("  return maybeRet\n");
-        this.push("} else {\n");
-        this.push(`  return &_${otherClassName}_default\n`);
+        this.push(`if ${fieldAccess} == nil {\n`);
+        this.push(`  return ${otherClassName}_default()\n`);
         this.push("}\n");
-      } else if (isStructType) {
-        // Stored as GoType value; return a pointer to it.
-        this.push(`return &${fieldAccess}\n`);
+        this.push(`return ${fieldAccess}\n`);
       } else {
         this.push(`return ${fieldAccess}\n`);
       }
       this.push("}\n\n");
     }
 
+    // Write unrecognized() on *_${className}_impl.
+    this.push(
+      `func (s *_${className}_impl) unrecognized() *skir_client.Internal__UnrecognizedFields {\n`,
+    );
+    this.push(`return s.__unrecognized\n`);
+    this.push("}\n\n");
+
+    // Write isDefaultInstance() on *_${className}_impl.
+    this.push(`func (s *_${className}_impl) isDefaultInstance() bool {\n`);
+    this.push(`return s == &_${className}_default_impl\n`);
+    this.push("}\n\n");
+
     // Write the Search methods for keyed array fields.
     for (const field of fields) {
       const keyedArrayHelper = this.getKeyedArrayHelper(field.type!);
-      if (!keyedArrayHelper) {
-        continue;
-      }
+      if (!keyedArrayHelper) continue;
       const {
         mapType,
         itemType,
@@ -235,12 +264,12 @@ class GoSourceFileGenerator {
       const indexingAccess = `${rawFieldAccess}_indexed`;
       this.push(
         commentify([
-          `Search${fieldName} returns a pointer to the element in the ${fieldName} array whose key equals k.`,
-          "Return nil if no such element exists.",
+          `Search${fieldName} returns the element in the ${fieldName} array whose key equals k.`,
+          "Returns an absent Optional if no such element exists.",
         ]),
       );
       this.push(
-        `func (s *${className}) Search${fieldName}(k ${exposedKeyType}) *${itemType} {\n`,
+        `func (s *_${className}_impl) Search${fieldName}(k ${exposedKeyType}) skir_client.Optional[${itemType}] {\n`,
       );
       this.push(`indexingPtr := ${indexingAccess}\n`);
       this.push("m := indexingPtr.Load()\n");
@@ -252,18 +281,22 @@ class GoSourceFileGenerator {
       this.push("indexingPtr.Store(&newMap)\n");
       this.push("m = &newMap\n");
       this.push("}\n");
-      this.push(`return (*m)[${exposedKeyToComparableExpr}]\n`);
+      this.push(`v, ok := (*m)[${exposedKeyToComparableExpr}]\n`);
+      this.push("if !ok {\n");
+      this.push(`return skir_client.Optional[${itemType}]{}\n`);
+      this.push("}\n");
+      this.push(`return skir_client.OptionalOf[${itemType}](v)\n`);
       this.push("}\n\n");
     }
 
     // Write the String() method
-    this.push(`func (s *${className}) String() string {\n`);
+    this.push(`func (s *_${className}_impl) String() string {\n`);
     this.push(
-      `return ${className}_serializer().ToJson(*s, skir_client.Readable{})\n`,
+      `return ${className}_serializer().ToJson(s, skir_client.Readable{})\n`,
     );
     this.push("}\n\n");
 
-    // Write ToBuilder() method.
+    // Write ToBuilder() method (on value receiver so both value and pointer implement it).
     this.push(
       commentify([
         `ToBuilder returns a new builder with all fields copied from this ${className}.`,
@@ -271,9 +304,9 @@ class GoSourceFileGenerator {
       ]),
     );
     this.push(
-      `func (s ${className}) ToBuilder() *${className}_partialBuilderType {\n`,
+      `func (s *_${className}_impl) ToBuilder() *${className}_partialBuilderType {\n`,
     );
-    this.push(`  return &${className}_partialBuilderType{s: s}\n`);
+    this.push(`  return &${className}_partialBuilderType{s: *s}\n`);
     this.push("}\n\n");
 
     // Define the builder interfaces.
@@ -284,17 +317,12 @@ class GoSourceFileGenerator {
     for (const [i, field] of fields.entries()) {
       const fieldName = convertCase(field.name.text, "UpperCamel");
       const fieldType = field.type!;
-      const goType = typeSpeller.getGoType(fieldType);
       const nextField = fields[i + 1];
+      const paramType = getInterfaceReturnType(field);
       this.push(`type ${fieldToBuilderName(field)} interface {\n`);
       const returnType = fieldToBuilderName(nextField);
-      this.push(
-        commentify([
-          docToCommentText(field.doc),
-          fieldType.kind === "optional" ? "The v parameter may be nil." : "",
-        ]),
-      );
-      this.push(`Set${fieldName}(v ${goType}) ${returnType}\n`);
+      this.push(commentify(docToCommentText(field.doc)));
+      this.push(`Set${fieldName}(v ${paramType}) ${returnType}\n`);
       if (fieldType.kind === "array") {
         const itemType = typeSpeller.getGoType(fieldType.item);
         this.push(`Set${fieldName}_FromSlice(v []${itemType}) ${returnType}\n`);
@@ -305,34 +333,24 @@ class GoSourceFileGenerator {
     this.push(`  Build() ${className}\n`);
     this.push("}\n\n");
 
-    // Define the builder struct.
+    // Define the builder struct (stores _impl internally).
     this.push(`type _${className}_builder struct {\n`);
-    this.push(`s ${className}\n`);
+    this.push(`s _${className}_impl\n`);
     this.push("}\n\n");
 
-    // Write the setters of the builder.
+    // Write the setters of the ordered builder.
     for (const [i, field] of fields.entries()) {
       const builderName = `_${className}_builder`;
       const fieldName = convertCase(field.name.text, "UpperCamel");
       const fieldType = field.type!;
-      const goType = typeSpeller.getGoType(fieldType);
+      const paramType = getInterfaceReturnType(field);
       const nextField = fields[i + 1];
       const returnType = fieldToBuilderName(nextField);
       this.push(
-        `func (b *${builderName}) Set${fieldName}(v ${goType}) ${returnType} {\n`,
+        `func (b *${builderName}) Set${fieldName}(v ${paramType}) ${returnType} {\n`,
       );
       const fieldAccess = "b.s._" + convertCase(field.name.text, "lowerCamel");
-      if (field.isRecursive === "hard") {
-        this.push(`  ${fieldAccess} = &v\n`);
-      } else {
-        this.push(`  ${fieldAccess} = v\n`);
-      }
-      const setterKeyedArrayHelper = this.getKeyedArrayHelper(fieldType);
-      if (setterKeyedArrayHelper) {
-        this.push(
-          `  ${fieldAccess}_indexed = &atomic.Pointer[${setterKeyedArrayHelper.mapType}]{}\n`,
-        );
-      }
+      this.writeBuilderSetterBody(field, fieldAccess, "v");
       this.push("  return b\n");
       this.push("}\n\n");
       if (fieldType.kind === "array") {
@@ -347,9 +365,9 @@ class GoSourceFileGenerator {
       }
     }
 
-    // Write the Build() method of the builder.
+    // Write the Build() method of the ordered builder.
     this.push(`func (b *_${className}_builder) Build() ${className} {\n`);
-    this.push("  return b.s\n");
+    this.push("  return &b.s\n");
     this.push("}\n\n");
 
     // Write the builder factory function.
@@ -365,9 +383,9 @@ class GoSourceFileGenerator {
     this.push(`  return &_${className}_builder{}\n`);
     this.push("}\n\n");
 
-    // Define the partial builder type.
+    // Define the partial builder type (stores _impl internally).
     this.push(`type ${className}_partialBuilderType struct {\n`);
-    this.push(`s ${className}\n`);
+    this.push(`s _${className}_impl\n`);
     this.push("}\n\n");
 
     // Write the setters for the partial builder.
@@ -375,28 +393,13 @@ class GoSourceFileGenerator {
       const builderTypeName = `${className}_partialBuilderType`;
       const fieldName = convertCase(field.name.text, "UpperCamel");
       const fieldType = field.type!;
-      const goType = typeSpeller.getGoType(fieldType);
+      const paramType = getInterfaceReturnType(field);
+      this.push(commentify(docToCommentText(field.doc)));
       this.push(
-        commentify([
-          docToCommentText(field.doc),
-          fieldType.kind === "optional" ? "The v parameter may be nil." : "",
-        ]),
-      );
-      this.push(
-        `func (b *${builderTypeName}) Set${fieldName}(v ${goType}) *${builderTypeName} {\n`,
+        `func (b *${builderTypeName}) Set${fieldName}(v ${paramType}) *${builderTypeName} {\n`,
       );
       const fieldAccess = "b.s._" + convertCase(field.name.text, "lowerCamel");
-      if (field.isRecursive === "hard") {
-        this.push(`  ${fieldAccess} = &v\n`);
-      } else {
-        this.push(`  ${fieldAccess} = v\n`);
-      }
-      const partialSetterKeyedArrayHelper = this.getKeyedArrayHelper(fieldType);
-      if (partialSetterKeyedArrayHelper) {
-        this.push(
-          `  ${fieldAccess}_indexed = &atomic.Pointer[${partialSetterKeyedArrayHelper.mapType}]{}\n`,
-        );
-      }
+      this.writeBuilderSetterBody(field, fieldAccess, "v");
       this.push("  return b\n");
       this.push("}\n\n");
       if (fieldType.kind === "array") {
@@ -415,7 +418,7 @@ class GoSourceFileGenerator {
     this.push(
       `func (b *${className}_partialBuilderType) Build() ${className} {\n`,
     );
-    this.push("  return b.s\n");
+    this.push("  return &b.s\n");
     this.push("}\n\n");
 
     // Write the partial builder factory function.
@@ -429,12 +432,12 @@ class GoSourceFileGenerator {
       `func ${className}_partialBuilder() *${className}_partialBuilderType {\n`,
     );
     this.push(
-      `  return &${className}_partialBuilderType{s: _${className}_default}\n`,
+      `  return &${className}_partialBuilderType{s: _${className}_default_impl}\n`,
     );
     this.push("}\n\n");
 
-    // Default struct value.
-    this.push(`var _${className}_default = ${className}{\n`);
+    // Default _impl value.
+    this.push(`var _${className}_default_impl = _${className}_impl{\n`);
     for (const field of fields) {
       const fieldType = field.type!;
       const keyedArrayHelper = this.getKeyedArrayHelper(fieldType);
@@ -444,27 +447,40 @@ class GoSourceFileGenerator {
           .concat(convertCase(field.name.text, "lowerCamel"))
           .concat("_indexed");
         this.push(`  ${fieldName}: &atomic.Pointer[${mapType}]{},\n`);
+      } else if (this.isStructType(fieldType) && field.isRecursive !== "hard") {
+        const fieldName = "_".concat(
+          convertCase(field.name.text, "lowerCamel"),
+        );
+        const goType = typeSpeller.getGoType(fieldType);
+        this.push(`  ${fieldName}: ${goType}_default(),\n`);
       }
     }
     this.push("}\n\n");
+
+    // Default interface variable (points to _default_impl).
+    this.push(
+      `var _${className}_default ${className} = &_${className}_default_impl\n\n`,
+    );
+
     this.push(
       commentify([
-        `${className}_default returns a pointer to the default ${className}.`,
-        "All fields set to their default values.",
+        `${className}_default returns the default ${className}.`,
+        "All fields are set to their default values.",
       ]),
     );
-    this.push(`func ${className}_default() *${className} {\n`);
-    this.push(`  return &_${className}_default\n`);
+    this.push(`func ${className}_default() ${className} {\n`);
+    this.push(`  return _${className}_default\n`);
     this.push("}\n\n");
 
-    // Adapter
+    // Adapter (typed on the interface).
     const qualifiedRecordName = struct.recordAncestors
       .map((r) => r.name.text)
       .join(".");
     this.push(
       `var _${className}_adapter = skir_client.Internal__NewStructAdapter(\n`,
     );
-    this.push(`&_${className}_default,\n`);
+    this.push(`${className}_default(),\n`);
+    this.push(`func(s ${className}) bool { return s.isDefaultInstance() },\n`);
     this.push(`${className}_partialBuilder,\n`);
     this.push(
       `func(b *${className}_partialBuilderType) ${className} { return b.Build() },\n`,
@@ -473,7 +489,7 @@ class GoSourceFileGenerator {
     this.push(`${toGoStringLiteral(qualifiedRecordName)},\n`);
     this.push(`${toGoStringLiteral(docToCommentText(struct.record.doc))},\n`);
     this.push(
-      `func(s *${className}) *skir_client.Internal__UnrecognizedFields { return s.__unrecognized },\n`,
+      `func(s ${className}) *skir_client.Internal__UnrecognizedFields { return s.unrecognized() },\n`,
     );
     this.push(
       `func(b *${className}_partialBuilderType, u *skir_client.Internal__UnrecognizedFields) { b.s.__unrecognized = u },\n`,
@@ -492,28 +508,16 @@ class GoSourceFileGenerator {
     this.push(`return _${className}_adapter.Serializer()\n`);
     this.push("}\n\n");
 
-    // init() – add fields, removed numbers, finalize.
+    // init() – initialize struct-type field defaults, add fields, finalize.
     this.push("func init() {\n");
+    // Register fields with the adapter.
     for (const field of struct.record.fields) {
       const fieldName = "_" + convertCase(field.name.text, "lowerCamel");
-      const setterName = "Set" + convertCase(field.name.text, "UpperCamel");
+      const getterName = structFieldToGetterName(field);
       const type = field.type!;
-      const goType = typeSpeller.getGoType(type);
       const serializerExpr = typeSpeller.getSerializerExpression(type);
-      let getterBody: string;
-      if (field.isRecursive === "hard") {
-        getterBody = [
-          "",
-          `if v := s.${fieldName}; v != nil {`,
-          "  return v",
-          "} else {",
-          `  return &_${goType}_default`,
-          "}",
-          "",
-        ].join("\n");
-      } else {
-        getterBody = ` return &s.${fieldName} `;
-      }
+      const goType = typeSpeller.getGoType(type);
+      const builderType = className.concat("_partialBuilderType");
       this.push(
         `skir_client.Internal__AddField(\n` +
           `_${className}_adapter,\n` +
@@ -521,8 +525,8 @@ class GoSourceFileGenerator {
           `${field.number},\n` +
           `${serializerExpr},\n` +
           `${toGoStringLiteral(docToCommentText(field.doc))},\n` +
-          `func(s *${className}) *${goType} {${getterBody}},\n` +
-          `func(b *${className}_partialBuilderType, v ${goType}) { b.${setterName}(v) },\n` +
+          `func(s ${className}) ${goType} { return s.${getterName}() },\n` +
+          `func(b *${builderType}, v ${goType}) { b.s.${fieldName} = v },\n` +
           ")\n",
       );
     }
@@ -531,6 +535,29 @@ class GoSourceFileGenerator {
     }
     this.push(`_${className}_adapter.Finalize()\n`);
     this.push("}\n\n");
+  }
+
+  // Writes the body of a builder setter for one field.
+  // fieldAccess: Go expression for the field (e.g. "b.s._foo")
+  // varName: the parameter variable name, e.g. "v"
+  private writeBuilderSetterBody(
+    field: Field,
+    fieldAccess: string,
+    varName: string,
+  ): void {
+    const type = field.type!;
+    if (type.kind === "array") {
+      // Array: direct assignment + reset indexed cache if keyed
+      this.push(`  ${fieldAccess} = ${varName}\n`);
+      const keyedArrayHelper = this.getKeyedArrayHelper(type);
+      if (keyedArrayHelper) {
+        this.push(
+          `  ${fieldAccess}_indexed = &atomic.Pointer[${keyedArrayHelper.mapType}]{}\n`,
+        );
+      }
+    } else {
+      this.push(`  ${fieldAccess} = ${varName}\n`);
+    }
   }
 
   private writeTypesForEnum(record: RecordLocation): void {
@@ -709,7 +736,6 @@ class GoSourceFileGenerator {
         commentify([
           `${className}_${lowerName}Wrapper creates a '${variantName}' variant wrapping the given value.`,
           docToCommentText(variant.doc),
-          variantType.kind === "optional" ? "The v parameter may be nil." : "",
         ]),
       );
       const implName = `_${className}_value_${lowerName}Wrapper`;
@@ -729,30 +755,19 @@ class GoSourceFileGenerator {
       const upperName = convertCase(variantName, "UpperCamel");
       const type = variant.type!;
       const goType = typeSpeller.getGoType(type);
-      const isStructType = this.isStructType(type);
-      const returnType = isStructType ? `*${goType}` : goType;
       this.push(
         commentify([
           `Unwrap${upperName} returns the '${variantName}' value wrapped in this ${className}.`,
           `Assumes that Is${upperName}() is true. Panics otherwise.`,
-          isStructType
-            ? "\nThe return value is never nil."
-            : type.kind === "optional"
-              ? "\nThe return value may be nil."
-              : "",
         ]),
       );
-      this.push(`func (e ${className}) Unwrap${upperName}() ${returnType} {\n`);
+      this.push(`func (e ${className}) Unwrap${upperName}() ${goType} {\n`);
       this.push(`if e.kind != ${kindType}_${lowerName}Wrapper {\n`);
       this.push(
         `panic("${className}.Unwrap${upperName}(): kind is not ${upperName}Wrapper")\n`,
       );
       this.push("}\n");
-      if (isStructType) {
-        this.push(`return e.value.Unwrap${upperName}()\n`);
-      } else {
-        this.push(`return *e.value.Unwrap${upperName}()\n`);
-      }
+      this.push(`return *e.value.Unwrap${upperName}()\n`);
       this.push("}\n\n");
     }
 
@@ -774,9 +789,7 @@ class GoSourceFileGenerator {
     for (const variant of wrapperVariants) {
       const upperName = convertCase(variant.name.text, "UpperCamel");
       const goType = typeSpeller.getGoType(variant.type!);
-      const isStructType = this.isStructType(variant.type!);
-      const paramType = isStructType ? `*${goType}` : goType;
-      this.push(`On${upperName}Wrapper(v ${paramType}) T\n`);
+      this.push(`On${upperName}Wrapper(v ${goType}) T\n`);
     }
     this.push("}\n\n");
 
@@ -879,7 +892,6 @@ class GoSourceFileGenerator {
       const upperName = convertCase(variantName, "UpperCamel");
       const goType = typeSpeller.getGoType(variant.type!);
       const serializerExpr = typeSpeller.getSerializerExpression(variant.type!);
-      const getValueExpr = `func(e ${className}) *${goType} { return e.value.Unwrap${upperName}() }`;
       this.push(
         `skir_client.Internal__AddWrapperVariant(\n` +
           `_${className}_adapter,\n` +
@@ -889,7 +901,7 @@ class GoSourceFileGenerator {
           `${serializerExpr},\n` +
           `${toGoStringLiteral(docToCommentText(variant.doc))},\n` +
           `func(v ${goType}) ${className} { return ${className}_${lowerName}Wrapper(v) },\n` +
-          `${getValueExpr},\n` +
+          `func(e ${className}) ${goType} { return e.Unwrap${upperName}() },\n` +
           ")\n",
       );
     }
@@ -935,7 +947,6 @@ class GoSourceFileGenerator {
     if (goLiteral) {
       this.push(`const ${goName} ${goType} = ${goLiteral}\n\n`);
     } else {
-      const isStructType = this.isStructType(type);
       const serializerExpr = typeSpeller.getSerializerExpression(type);
       const goStringLiteral = toGoStringLiteral(
         JSON.stringify(constant.valueAsDenseJson),
@@ -945,8 +956,8 @@ class GoSourceFileGenerator {
       this.push(`  v, _ := ${serializerExpr}.FromJson(${goStringLiteral})\n`);
       this.push(`  _${goName} = &v\n`);
       this.push("}\n\n");
-      this.push(`func ${goName}() ${isStructType ? "*" : ""}${goType} {\n`);
-      this.push(`  return ${isStructType ? "" : "*"}_${goName}\n`);
+      this.push(`func ${goName}() ${goType} {\n`);
+      this.push(`  return *_${goName}\n`);
       this.push("}\n\n");
     }
   }
@@ -961,7 +972,7 @@ class GoSourceFileGenerator {
     }
     const { typeSpeller } = this;
     const itemType = typeSpeller.getGoType(type.item);
-    const makeMapType = (comp: string): string => `map[${comp}]*${itemType}`;
+    const makeMapType = (comp: string): string => `map[${comp}]${itemType}`;
     const keyAccessor = "e.".concat(
       key.path
         .map((p) => structFieldToGetterName(p.name.text).concat("()"))

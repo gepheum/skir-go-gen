@@ -171,7 +171,7 @@ func TestFullName_Serializer_ToJson_Dense(t *testing.T) {
 
 func TestFullName_Serializer_ToJson_Default(t *testing.T) {
 	s := full_name.FullName_serializer()
-	got := s.ToJson(*full_name.FullName_default())
+	got := s.ToJson(full_name.FullName_default())
 	// Dense format for an all-default struct is an empty array.
 	if got != "[]" {
 		t.Errorf("default dense json: got %q, want %q", got, "[]")
@@ -346,7 +346,7 @@ func TestFullName_Serializer_Bytes_RoundTrip(t *testing.T) {
 
 func TestFullName_Serializer_Bytes_RoundTrip_Default(t *testing.T) {
 	s := full_name.FullName_serializer()
-	decoded, err := s.FromBytes(s.ToBytes(*full_name.FullName_default()))
+	decoded, err := s.FromBytes(s.ToBytes(full_name.FullName_default()))
 	if err != nil {
 		t.Fatalf("FromBytes(default) error: %v", err)
 	}

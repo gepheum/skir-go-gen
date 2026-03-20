@@ -31,9 +31,9 @@ func (a Array[T]) IsEmpty() bool {
 	return len(a.s) == 0
 }
 
-// At returns a pointer to the element at index i. Panics if i is out of range.
-func (a Array[T]) At(i int) *T {
-	return &a.s[i]
+// At returns the element at index i. Panics if i is out of range.
+func (a Array[T]) At(i int) T {
+	return a.s[i]
 }
 
 // ToSlice returns a copy of the underlying elements as a []T.
@@ -43,24 +43,24 @@ func (a Array[T]) ToSlice() []T {
 	return c
 }
 
-// All returns an iterator over index-pointer pairs in forward order,
+// All returns an iterator over index-value pairs in forward order,
 // compatible with range loops in Go 1.23+.
-func (a Array[T]) All() iter.Seq2[int, *T] {
-	return func(yield func(int, *T) bool) {
-		for i := range a.s {
-			if !yield(i, &a.s[i]) {
+func (a Array[T]) All() iter.Seq2[int, T] {
+	return func(yield func(int, T) bool) {
+		for i, v := range a.s {
+			if !yield(i, v) {
 				return
 			}
 		}
 	}
 }
 
-// Backward returns an iterator over index-pointer pairs in reverse order,
+// Backward returns an iterator over index-value pairs in reverse order,
 // compatible with range loops in Go 1.23+.
-func (a Array[T]) Backward() iter.Seq2[int, *T] {
-	return func(yield func(int, *T) bool) {
+func (a Array[T]) Backward() iter.Seq2[int, T] {
+	return func(yield func(int, T) bool) {
 		for i := len(a.s) - 1; i >= 0; i-- {
-			if !yield(i, &a.s[i]) {
+			if !yield(i, a.s[i]) {
 				return
 			}
 		}

@@ -30,8 +30,8 @@ func TestArrayFromSlice_copiesSlice(t *testing.T) {
 	a := ArrayFromSlice(s)
 	// Mutate the original slice – the array must be unaffected.
 	s[0] = 99
-	if *a.At(0) != 1 {
-		t.Fatalf("ArrayFromSlice did not copy: At(0) = %d, want 1", *a.At(0))
+	if a.At(0) != 1 {
+		t.Fatalf("ArrayFromSlice did not copy: At(0) = %d, want 1", a.At(0))
 	}
 }
 
@@ -78,7 +78,7 @@ func TestZeroValue(t *testing.T) {
 func TestAt(t *testing.T) {
 	a := ArrayFromSlice([]string{"x", "y", "z"})
 	for i, want := range []string{"x", "y", "z"} {
-		if got := *a.At(i); got != want {
+		if got := a.At(i); got != want {
 			t.Errorf("At(%d) = %q, want %q", i, got, want)
 		}
 	}
@@ -86,10 +86,10 @@ func TestAt(t *testing.T) {
 
 func TestAt_elementIsIsolated(t *testing.T) {
 	a := ArrayFromSlice([]int{10, 20})
-	p0a := a.At(0)
-	p0b := a.At(0)
-	if p0a != p0b {
-		t.Error("At(0) returned different pointers on consecutive calls")
+	v0a := a.At(0)
+	v0b := a.At(0)
+	if v0a != v0b {
+		t.Error("At(0) returned different values on consecutive calls")
 	}
 }
 
@@ -118,7 +118,7 @@ func TestToSlice_returnsCopy(t *testing.T) {
 	s := a.ToSlice()
 	s[0] = 99
 	// The array itself must be unaffected.
-	if *a.At(0) != 1 {
+	if a.At(0) != 1 {
 		t.Fatal("ToSlice returned a reference to internal storage, not a copy")
 	}
 }
@@ -135,9 +135,9 @@ func TestAll_order(t *testing.T) {
 	a := ArrayFromSlice([]int{10, 20, 30})
 	var gotIndices []int
 	var gotValues []int
-	for i, p := range a.All() {
+	for i, v := range a.All() {
 		gotIndices = append(gotIndices, i)
-		gotValues = append(gotValues, *p)
+		gotValues = append(gotValues, v)
 	}
 	if !slices.Equal(gotIndices, []int{0, 1, 2}) {
 		t.Errorf("All indices = %v, want [0 1 2]", gotIndices)
@@ -161,8 +161,8 @@ func TestAll_empty(t *testing.T) {
 func TestAll_earlyStop(t *testing.T) {
 	a := ArrayFromSlice([]int{1, 2, 3, 4, 5})
 	var got []int
-	for _, p := range a.All() {
-		got = append(got, *p)
+	for _, v := range a.All() {
+		got = append(got, v)
 		if len(got) == 3 {
 			break
 		}
@@ -176,9 +176,9 @@ func TestBackward_order(t *testing.T) {
 	a := ArrayFromSlice([]int{10, 20, 30})
 	var gotIndices []int
 	var gotValues []int
-	for i, p := range a.Backward() {
+	for i, v := range a.Backward() {
 		gotIndices = append(gotIndices, i)
-		gotValues = append(gotValues, *p)
+		gotValues = append(gotValues, v)
 	}
 	if !slices.Equal(gotIndices, []int{2, 1, 0}) {
 		t.Errorf("Backward indices = %v, want [2 1 0]", gotIndices)
@@ -202,8 +202,8 @@ func TestBackward_empty(t *testing.T) {
 func TestBackward_earlyStop(t *testing.T) {
 	a := ArrayFromSlice([]int{1, 2, 3, 4, 5})
 	var got []int
-	for _, p := range a.Backward() {
-		got = append(got, *p)
+	for _, v := range a.Backward() {
+		got = append(got, v)
 		if len(got) == 2 {
 			break
 		}
@@ -217,9 +217,9 @@ func TestBackward_singleElement(t *testing.T) {
 	a := ArrayFromSlice([]int{42})
 	var gotIndices []int
 	var gotValues []int
-	for i, p := range a.Backward() {
+	for i, v := range a.Backward() {
 		gotIndices = append(gotIndices, i)
-		gotValues = append(gotValues, *p)
+		gotValues = append(gotValues, v)
 	}
 	if !slices.Equal(gotIndices, []int{0}) {
 		t.Errorf("Backward single-element indices = %v, want [0]", gotIndices)

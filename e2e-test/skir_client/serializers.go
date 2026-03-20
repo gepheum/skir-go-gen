@@ -84,7 +84,7 @@ func ArraySerializer[E any](item Serializer[E]) Serializer[Array[E]] {
 
 // OptionalSerializer wraps an existing Serializer to produce a
 // Serializer[*E], where nil represents the absent value.
-func OptionalSerializer[E any](other Serializer[E]) Serializer[*E] {
+func OptionalSerializer[E any](other Serializer[E]) Serializer[Optional[E]] {
 	return newSerializer(NewOptionalAdapter(other.adapter))
 }
 
@@ -98,17 +98,17 @@ func Internal__ArraySerializer[E any](item Serializer[E], keyExtractor string) S
 
 type boolAdapter struct{}
 
-func (a *boolAdapter) isDefault(v *bool) bool { return !*v }
+func (a *boolAdapter) isDefault(v bool) bool { return !v }
 
-func (a *boolAdapter) toJson(input *bool, eolIndent *string, out *strings.Builder) {
+func (a *boolAdapter) toJson(input bool, eolIndent *string, out *strings.Builder) {
 	if eolIndent != nil {
-		if *input {
+		if input {
 			out.WriteString("true")
 		} else {
 			out.WriteString("false")
 		}
 	} else {
-		if *input {
+		if input {
 			out.WriteByte('1')
 		} else {
 			out.WriteByte('0')
@@ -134,8 +134,8 @@ func (a *boolAdapter) fromJson(json fastjson.Value, _ bool) (bool, error) {
 	}
 }
 
-func (a *boolAdapter) encode(input *bool, out *binaryOutput) {
-	if *input {
+func (a *boolAdapter) encode(input bool, out *binaryOutput) {
+	if input {
 		out.writeUint8(1)
 	} else {
 		out.writeUint8(0)
@@ -196,13 +196,13 @@ func decodeNumber(in *binaryInput) int64 {
 
 type int32Adapter struct{}
 
-func (a *int32Adapter) isDefault(v *int32) bool { return *v == 0 }
+func (a *int32Adapter) isDefault(v int32) bool { return v == 0 }
 
 // toJson converts input to a JSON number. eolIndent is not used: int32 has
 // the same representation in both flavors, and always formats without
 // scientific notation.
-func (a *int32Adapter) toJson(input *int32, _ *string, out *strings.Builder) {
-	out.WriteString(strconv.FormatInt(int64(*input), 10))
+func (a *int32Adapter) toJson(input int32, _ *string, out *strings.Builder) {
+	out.WriteString(strconv.FormatInt(int64(input), 10))
 }
 
 // fromJson parses a JSON number or string as int32. Mirrors the TypeScript
@@ -236,26 +236,25 @@ func (a *int32Adapter) fromJson(json fastjson.Value, _ bool) (int32, error) {
 
 // encode writes the int32 to the binary stream using the skir wire format.
 // Mirrors TypeScript Int32Serializer.encode exactly.
-func (a *int32Adapter) encode(input *int32, out *binaryOutput) {
-	v := *input
+func (a *int32Adapter) encode(input int32, out *binaryOutput) {
 	switch {
-	case v < -65536:
+	case input < -65536:
 		out.writeUint8(237)
-		out.writeInt32(v) // v is int32, already in [-2147483648, -65537]
-	case v < -256:
+		out.writeInt32(input) // v is int32, already in [-2147483648, -65537]
+	case input < -256:
 		out.writeUint8(236)
-		out.writeUint16(uint16(v + 65536))
-	case v < 0:
+		out.writeUint16(uint16(input + 65536))
+	case input < 0:
 		out.writeUint8(235)
-		out.writeUint8(uint8(v + 256))
-	case v < 232:
-		out.writeUint8(uint8(v))
-	case v < 65536:
+		out.writeUint8(uint8(input + 256))
+	case input < 232:
+		out.writeUint8(uint8(input))
+	case input < 65536:
 		out.writeUint8(232)
-		out.writeUint16(uint16(v))
+		out.writeUint16(uint16(input))
 	default:
 		out.writeUint8(233)
-		out.writeUint32(uint32(v)) // v is int32, so always <= math.MaxInt32
+		out.writeUint32(uint32(input)) // v is int32, so always <= math.MaxInt32
 	}
 }
 
@@ -276,17 +275,16 @@ const maxSafeInt64JSON = int64(9007199254740991)
 
 type int64Adapter struct{}
 
-func (a *int64Adapter) isDefault(v *int64) bool { return *v == 0 }
+func (a *int64Adapter) isDefault(v int64) bool { return v == 0 }
 
 // toJson writes a JSON number when the value fits in a JS safe integer, and
 // a JSON string otherwise. Never uses scientific notation.
-func (a *int64Adapter) toJson(input *int64, _ *string, out *strings.Builder) {
-	v := *input
-	if v >= -maxSafeInt64JSON && v <= maxSafeInt64JSON {
-		out.WriteString(strconv.FormatInt(v, 10))
+func (a *int64Adapter) toJson(input int64, _ *string, out *strings.Builder) {
+	if input >= -maxSafeInt64JSON && input <= maxSafeInt64JSON {
+		out.WriteString(strconv.FormatInt(input, 10))
 	} else {
 		out.WriteByte('"')
-		out.WriteString(strconv.FormatInt(v, 10))
+		out.WriteString(strconv.FormatInt(input, 10))
 		out.WriteByte('"')
 	}
 }
@@ -323,19 +321,18 @@ func (a *int64Adapter) fromJson(json fastjson.Value, _ bool) (int64, error) {
 //	0                       → writeUint8(0)
 //	fits int32 range        → reuse int32 encoding
 //	otherwise               → wire 238 + writeInt64
-func (a *int64Adapter) encode(input *int64, out *binaryOutput) {
-	v := *input
-	if v == 0 {
+func (a *int64Adapter) encode(input int64, out *binaryOutput) {
+	if input == 0 {
 		out.writeUint8(0)
 		return
 	}
-	if v >= -2147483648 && v <= 2147483647 {
-		i32 := int32(v)
-		int32AdapterSingleton.encode(&i32, out)
+	if input >= -2147483648 && input <= 2147483647 {
+		i32 := int32(input)
+		int32AdapterSingleton.encode(i32, out)
 		return
 	}
 	out.writeUint8(238)
-	out.writeInt64(v)
+	out.writeInt64(input)
 }
 
 // decode reads the next encoded number and returns it as int64.
@@ -357,17 +354,16 @@ const maxSafeHash64JSON = uint64(9007199254740991)
 
 type hash64Adapter struct{}
 
-func (a *hash64Adapter) isDefault(v *uint64) bool { return *v == 0 }
+func (a *hash64Adapter) isDefault(v uint64) bool { return v == 0 }
 
 // toJson writes a JSON number when the value fits in a JS safe integer, and
 // a JSON string otherwise. Never uses scientific notation.
-func (a *hash64Adapter) toJson(input *uint64, _ *string, out *strings.Builder) {
-	v := *input
-	if v <= maxSafeHash64JSON {
-		out.WriteString(strconv.FormatUint(v, 10))
+func (a *hash64Adapter) toJson(input uint64, _ *string, out *strings.Builder) {
+	if input <= maxSafeHash64JSON {
+		out.WriteString(strconv.FormatUint(input, 10))
 	} else {
 		out.WriteByte('"')
-		out.WriteString(strconv.FormatUint(v, 10))
+		out.WriteString(strconv.FormatUint(input, 10))
 		out.WriteByte('"')
 	}
 }
@@ -408,20 +404,19 @@ func (a *hash64Adapter) fromJson(json fastjson.Value, _ bool) (uint64, error) {
 //	232..65535     → wire 232 + writeUint16
 //	65536..2^32-1  → wire 233 + writeUint32
 //	>= 2^32        → wire 234 + writeHash64
-func (a *hash64Adapter) encode(input *uint64, out *binaryOutput) {
-	v := *input
+func (a *hash64Adapter) encode(input uint64, out *binaryOutput) {
 	switch {
-	case v < 232:
-		out.writeUint8(uint8(v))
-	case v < 65536:
+	case input < 232:
+		out.writeUint8(uint8(input))
+	case input < 65536:
 		out.writeUint8(232)
-		out.writeUint16(uint16(v))
-	case v < 4294967296:
+		out.writeUint16(uint16(input))
+	case input < 4294967296:
 		out.writeUint8(233)
-		out.writeUint32(uint32(v))
+		out.writeUint32(uint32(input))
 	default:
 		out.writeUint8(234)
-		out.writeHash64(v)
+		out.writeHash64(input)
 	}
 }
 
@@ -455,12 +450,12 @@ func floatSpecialString(f float64) string {
 
 type float32Adapter struct{}
 
-func (a *float32Adapter) isDefault(v *float32) bool { return *v == 0 }
+func (a *float32Adapter) isDefault(v float32) bool { return v == 0 }
 
 // toJson writes a JSON number for finite values, or a quoted string ("NaN",
 // "Infinity", "-Infinity") for non-finite values.
-func (a *float32Adapter) toJson(input *float32, _ *string, out *strings.Builder) {
-	f := float64(*input)
+func (a *float32Adapter) toJson(input float32, _ *string, out *strings.Builder) {
+	f := float64(input)
 	if math.IsInf(f, 0) || math.IsNaN(f) {
 		out.WriteByte('"')
 		out.WriteString(floatSpecialString(f))
@@ -500,13 +495,13 @@ func (a *float32Adapter) fromJson(json fastjson.Value, _ bool) (float32, error) 
 //
 //	0       → writeUint8(0)
 //	else    → wire 240 + writeFloat32
-func (a *float32Adapter) encode(input *float32, out *binaryOutput) {
-	if *input == 0 {
+func (a *float32Adapter) encode(input float32, out *binaryOutput) {
+	if input == 0 {
 		out.writeUint8(0)
 		return
 	}
 	out.writeUint8(240)
-	out.writeFloat32(*input)
+	out.writeFloat32(input)
 }
 
 // decode reads the wire byte and, if wire == 240, returns the exact float32.
@@ -527,17 +522,16 @@ func (a *float32Adapter) typeDescriptor() TypeDescriptor { return Float32Descrip
 
 type float64Adapter struct{}
 
-func (a *float64Adapter) isDefault(v *float64) bool { return *v == 0 }
+func (a *float64Adapter) isDefault(v float64) bool { return v == 0 }
 
-func (a *float64Adapter) toJson(input *float64, _ *string, out *strings.Builder) {
-	f := *input
-	if math.IsInf(f, 0) || math.IsNaN(f) {
+func (a *float64Adapter) toJson(input float64, _ *string, out *strings.Builder) {
+	if math.IsInf(input, 0) || math.IsNaN(input) {
 		out.WriteByte('"')
-		out.WriteString(floatSpecialString(f))
+		out.WriteString(floatSpecialString(input))
 		out.WriteByte('"')
 		return
 	}
-	out.WriteString(strconv.FormatFloat(f, 'g', -1, 64))
+	out.WriteString(strconv.FormatFloat(input, 'g', -1, 64))
 }
 
 func (a *float64Adapter) fromJson(json fastjson.Value, _ bool) (float64, error) {
@@ -563,13 +557,13 @@ func (a *float64Adapter) fromJson(json fastjson.Value, _ bool) (float64, error) 
 //
 //	0       → writeUint8(0)
 //	else    → wire 241 + writeFloat64
-func (a *float64Adapter) encode(input *float64, out *binaryOutput) {
-	if *input == 0 {
+func (a *float64Adapter) encode(input float64, out *binaryOutput) {
+	if input == 0 {
 		out.writeUint8(0)
 		return
 	}
 	out.writeUint8(241)
-	out.writeFloat64(*input)
+	out.writeFloat64(input)
 }
 
 func (a *float64Adapter) decode(in *binaryInput, _ bool) (float64, error) {
@@ -611,13 +605,13 @@ type timestampAdapter struct{}
 
 // isDefault returns true when the time corresponds to unix epoch (millis == 0),
 // matching the TypeScript default value Timestamp.UNIX_EPOCH.
-func (a *timestampAdapter) isDefault(v *time.Time) bool { return v.UnixMilli() == 0 }
+func (a *timestampAdapter) isDefault(v time.Time) bool { return v.UnixMilli() == 0 }
 
 // toJson mirrors TypeScript TimestampSerializer.toJson:
 //
 //	dense:    unix millis as JSON number
 //	readable: {"unix_millis": N, "formatted": "<ISO-8601>"}
-func (a *timestampAdapter) toJson(input *time.Time, eolIndent *string, out *strings.Builder) {
+func (a *timestampAdapter) toJson(input time.Time, eolIndent *string, out *strings.Builder) {
 	ms := input.UnixMilli()
 	if eolIndent == nil {
 		// All valid timestamps fit within Number.MAX_SAFE_INTEGER so we can
@@ -681,7 +675,7 @@ func (a *timestampAdapter) fromJson(json fastjson.Value, _ bool) (time.Time, err
 //
 //	unixMillis == 0 → writeUint8(0)
 //	else            → wire 239 + writeInt64(unix millis)
-func (a *timestampAdapter) encode(input *time.Time, out *binaryOutput) {
+func (a *timestampAdapter) encode(input time.Time, out *binaryOutput) {
 	ms := input.UnixMilli()
 	if ms == 0 {
 		out.writeUint8(0)
@@ -723,11 +717,11 @@ func encodeUint32(n uint32, out *binaryOutput) {
 
 type stringAdapter struct{}
 
-func (a *stringAdapter) isDefault(v *string) bool { return *v == "" }
+func (a *stringAdapter) isDefault(v string) bool { return v == "" }
 
 // toJson writes the string as a properly escaped JSON string. Same in both flavors.
-func (a *stringAdapter) toJson(input *string, _ *string, out *strings.Builder) {
-	writeJsonEscapedString(*input, out)
+func (a *stringAdapter) toJson(input string, _ *string, out *strings.Builder) {
+	writeJsonEscapedString(input, out)
 }
 
 // fromJson accepts a JSON string (or number 0 as the empty string, mirroring
@@ -755,18 +749,17 @@ func (a *stringAdapter) fromJson(json fastjson.Value, _ bool) (string, error) {
 //
 // The string is pre-sanitized to valid UTF-8 (invalid bytes → U+FFFD) so that
 // len(safe) gives the exact byte count before writing the length header.
-func (a *stringAdapter) encode(input *string, out *binaryOutput) {
-	s := *input
-	if len(s) == 0 {
+func (a *stringAdapter) encode(input string, out *binaryOutput) {
+	if len(input) == 0 {
 		out.writeUint8(242)
 		return
 	}
 	out.writeUint8(243)
 	var safe string
-	if utf8.ValidString(s) {
-		safe = s
+	if utf8.ValidString(input) {
+		safe = input
 	} else {
-		safe = strings.ToValidUTF8(s, string(utf8.RuneError))
+		safe = strings.ToValidUTF8(input, string(utf8.RuneError))
 	}
 	encodeUint32(uint32(len(safe)), out)
 	out.putUtf8String(safe) // already valid UTF-8; fast-paths to WriteString
@@ -793,13 +786,13 @@ func (a *stringAdapter) typeDescriptor() TypeDescriptor { return StringDescripto
 
 type bytesAdapter struct{}
 
-func (a *bytesAdapter) isDefault(v *Bytes) bool { return v.IsEmpty() }
+func (a *bytesAdapter) isDefault(v Bytes) bool { return v.IsEmpty() }
 
 // toJson mirrors TypeScript ByteStringSerializer.toJson:
 //
 //	dense:    standard base64 string (matching JS btoa / RFC 4648 with padding)
 //	readable: "hex:" + lowercase hex string
-func (a *bytesAdapter) toJson(input *Bytes, eolIndent *string, out *strings.Builder) {
+func (a *bytesAdapter) toJson(input Bytes, eolIndent *string, out *strings.Builder) {
 	out.WriteByte('"')
 	if eolIndent != nil {
 		out.WriteString("hex:")
@@ -842,14 +835,14 @@ func (a *bytesAdapter) fromJson(json fastjson.Value, _ bool) (Bytes, error) {
 //
 //	empty → wire 244
 //	else  → wire 245 + encodeUint32(byteLen) + raw bytes
-func (a *bytesAdapter) encode(input *Bytes, out *binaryOutput) {
+func (a *bytesAdapter) encode(input Bytes, out *binaryOutput) {
 	if input.IsEmpty() {
 		out.writeUint8(244)
 		return
 	}
 	out.writeUint8(245)
 	encodeUint32(uint32(input.Len()), out)
-	out.putBytes(*input)
+	out.putBytes(input)
 }
 
 // decode mirrors TypeScript ByteStringSerializer.decode:
@@ -888,34 +881,34 @@ func NewArrayAdapter[E any](item typeAdapter[E], keyExtractor string) *arrayAdap
 	}
 }
 
-func (a *arrayAdapter[E]) isDefault(v *Array[E]) bool { return v.IsEmpty() }
+func (a *arrayAdapter[E]) isDefault(v Array[E]) bool { return v.IsEmpty() }
 
 // toJson writes a JSON array. In readable mode each element is on its own
 // indented line; in dense mode elements are comma-separated with no whitespace.
-func (a *arrayAdapter[E]) toJson(input *Array[E], eolIndent *string, out *strings.Builder) {
+func (a *arrayAdapter[E]) toJson(input Array[E], eolIndent *string, out *strings.Builder) {
 	out.WriteByte('[')
 	if eolIndent != nil {
 		childIndent := *eolIndent + "  "
 		first := true
-		for _, elemPtr := range input.All() {
+		for _, elem := range input.All() {
 			if !first {
 				out.WriteByte(',')
 			}
 			first = false
 			out.WriteString(childIndent)
-			a.item.toJson(elemPtr, &childIndent, out)
+			a.item.toJson(elem, &childIndent, out)
 		}
 		if !input.IsEmpty() {
 			out.WriteString(*eolIndent)
 		}
 	} else {
 		first := true
-		for _, elemPtr := range input.All() {
+		for _, elem := range input.All() {
 			if !first {
 				out.WriteByte(',')
 			}
 			first = false
-			a.item.toJson(elemPtr, nil, out)
+			a.item.toJson(elem, nil, out)
 		}
 	}
 	out.WriteByte(']')
@@ -948,7 +941,7 @@ func (a *arrayAdapter[E]) fromJson(json fastjson.Value, keepUnrecognizedValues b
 //	length > 3  → wire 250 + encodeUint32(length)
 //
 // followed by each element encoded by the item adapter.
-func (a *arrayAdapter[E]) encode(input *Array[E], out *binaryOutput) {
+func (a *arrayAdapter[E]) encode(input Array[E], out *binaryOutput) {
 	n := input.Len()
 	if n <= 3 {
 		out.writeUint8(uint8(246 + n))
@@ -956,8 +949,8 @@ func (a *arrayAdapter[E]) encode(input *Array[E], out *binaryOutput) {
 		out.writeUint8(250)
 		encodeUint32(uint32(n), out)
 	}
-	for _, elemPtr := range input.All() {
-		a.item.encode(elemPtr, out)
+	for _, elem := range input.All() {
+		a.item.encode(elem, out)
 	}
 }
 
@@ -1012,55 +1005,58 @@ func NewOptionalAdapter[E any](other typeAdapter[E]) *optionalAdapter[E] {
 	}
 }
 
-func (a *optionalAdapter[E]) isDefault(v **E) bool { return *v == nil }
+func (a *optionalAdapter[E]) isDefault(v Optional[E]) bool { return !v.IsPresent() }
 
 // toJson writes JSON null for nil; otherwise delegates to the inner adapter.
-func (a *optionalAdapter[E]) toJson(input **E, eolIndent *string, out *strings.Builder) {
-	if *input == nil {
+func (a *optionalAdapter[E]) toJson(input Optional[E], eolIndent *string, out *strings.Builder) {
+	if input.IsPresent() {
+		a.other.toJson(input.value, eolIndent, out)
+	} else {
 		out.WriteString("null")
-		return
 	}
-	a.other.toJson(*input, eolIndent, out)
 }
 
 // fromJson returns nil for JSON null; otherwise delegates to the inner adapter
 // and returns a pointer to the decoded value.
-func (a *optionalAdapter[E]) fromJson(json fastjson.Value, keepUnrecognizedValues bool) (*E, error) {
+func (a *optionalAdapter[E]) fromJson(json fastjson.Value, keepUnrecognizedValues bool) (Optional[E], error) {
 	if json.Type() == fastjson.TypeNull {
-		return nil, nil
+		return Optional[E]{}, nil
 	}
 	v, err := a.other.fromJson(json, keepUnrecognizedValues)
 	if err != nil {
-		return nil, err
+		return Optional[E]{}, err
 	}
-	return &v, nil
+	return OptionalOf(v), nil
 }
 
 // encode mirrors TypeScript OptionalSerializerImpl.encode:
 //
 //	nil   → wire 255
 //	else  → delegate to inner adapter (which writes its own wire byte)
-func (a *optionalAdapter[E]) encode(input **E, out *binaryOutput) {
-	if *input == nil {
+func (a *optionalAdapter[E]) encode(input Optional[E], out *binaryOutput) {
+	if input.IsPresent() {
+		a.other.encode(input.value, out)
+	} else {
 		out.writeUint8(255)
-		return
 	}
-	a.other.encode(*input, out)
 }
 
 // decode mirrors TypeScript OptionalSerializerImpl.decode:
 // peek at the next wire byte; if 255, consume it and return nil;
 // otherwise let the inner adapter read the wire byte itself.
-func (a *optionalAdapter[E]) decode(in *binaryInput, keepUnrecognizedValues bool) (*E, error) {
+func (a *optionalAdapter[E]) decode(
+	in *binaryInput,
+	keepUnrecognizedValues bool,
+) (Optional[E], error) {
 	if in.peekUint8() == 255 {
 		in.readUint8() // consume the 255
-		return nil, nil
+		return Optional[E]{}, nil
 	}
 	v, err := a.other.decode(in, keepUnrecognizedValues)
 	if err != nil {
-		return nil, err
+		return Optional[E]{}, err
 	}
-	return &v, nil
+	return OptionalOf(v), nil
 }
 
 func (a *optionalAdapter[E]) typeDescriptor() TypeDescriptor { return a.desc }
