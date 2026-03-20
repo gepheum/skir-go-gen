@@ -217,15 +217,15 @@ func (a *Internal__StructAdapter[T, Builder]) Finalize() {
 // typeAdapter[T] implementation
 // ─────────────────────────────────────────────────────────────────────────────
 
-func (a *Internal__StructAdapter[T, Builder]) isDefault(value T) bool {
-	if a.isDefaultInstance(value) {
+func (a *Internal__StructAdapter[T, Builder]) isDefault(input T) bool {
+	if a.isDefaultInstance(input) {
 		return true
 	}
-	if a.getUnrecognized(value) != nil {
+	if a.getUnrecognized(input) != nil {
 		return false
 	}
 	for _, e := range a.orderedEntries {
-		if !e.isEntryDefault(value) {
+		if !e.isEntryDefault(input) {
 			return false
 		}
 	}

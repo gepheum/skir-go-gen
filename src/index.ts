@@ -948,13 +948,13 @@ class GoSourceFileGenerator {
       const goStringLiteral = toGoStringLiteral(
         JSON.stringify(constant.valueAsDenseJson),
       );
-      this.push(`var _${goName} *${goType} = nil\n\n`);
+      this.push(`var _${goName} ${goType}\n\n`);
       this.push("func init() {\n");
       this.push(`  v, _ := ${serializerExpr}.FromJson(${goStringLiteral})\n`);
-      this.push(`  _${goName} = &v\n`);
+      this.push(`  _${goName} = v\n`);
       this.push("}\n\n");
       this.push(`func ${goName}() ${goType} {\n`);
-      this.push(`  return *_${goName}\n`);
+      this.push(`  return _${goName}\n`);
       this.push("}\n\n");
     }
   }

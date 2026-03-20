@@ -357,8 +357,8 @@ func (a *Internal__EnumAdapter[T]) Finalize() {
 // typeAdapter[T] implementation
 // ─────────────────────────────────────────────────────────────────────────────
 
-func (a *Internal__EnumAdapter[T]) isDefault(value T) bool {
-	return a.getKindOrdinal(value) == 0
+func (a *Internal__EnumAdapter[T]) isDefault(input T) bool {
+	return a.getKindOrdinal(input) == 0
 }
 
 func (a *Internal__EnumAdapter[T]) toJson(input T, eolIndent *string, out *strings.Builder) {

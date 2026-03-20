@@ -98,7 +98,7 @@ func Internal__ArraySerializer[E any](item Serializer[E], keyExtractor string) S
 
 type boolAdapter struct{}
 
-func (a *boolAdapter) isDefault(v bool) bool { return !v }
+func (a *boolAdapter) isDefault(input bool) bool { return !input }
 
 func (a *boolAdapter) toJson(input bool, eolIndent *string, out *strings.Builder) {
 	if eolIndent != nil {
@@ -196,7 +196,7 @@ func decodeNumber(in *binaryInput) int64 {
 
 type int32Adapter struct{}
 
-func (a *int32Adapter) isDefault(v int32) bool { return v == 0 }
+func (a *int32Adapter) isDefault(input int32) bool { return input == 0 }
 
 // toJson converts input to a JSON number. eolIndent is not used: int32 has
 // the same representation in both flavors, and always formats without
@@ -275,7 +275,7 @@ const maxSafeInt64JSON = int64(9007199254740991)
 
 type int64Adapter struct{}
 
-func (a *int64Adapter) isDefault(v int64) bool { return v == 0 }
+func (a *int64Adapter) isDefault(input int64) bool { return input == 0 }
 
 // toJson writes a JSON number when the value fits in a JS safe integer, and
 // a JSON string otherwise. Never uses scientific notation.
@@ -354,7 +354,7 @@ const maxSafeHash64JSON = uint64(9007199254740991)
 
 type hash64Adapter struct{}
 
-func (a *hash64Adapter) isDefault(v uint64) bool { return v == 0 }
+func (a *hash64Adapter) isDefault(input uint64) bool { return input == 0 }
 
 // toJson writes a JSON number when the value fits in a JS safe integer, and
 // a JSON string otherwise. Never uses scientific notation.
@@ -450,7 +450,7 @@ func floatSpecialString(f float64) string {
 
 type float32Adapter struct{}
 
-func (a *float32Adapter) isDefault(v float32) bool { return v == 0 }
+func (a *float32Adapter) isDefault(input float32) bool { return input == 0 }
 
 // toJson writes a JSON number for finite values, or a quoted string ("NaN",
 // "Infinity", "-Infinity") for non-finite values.
@@ -522,7 +522,7 @@ func (a *float32Adapter) typeDescriptor() TypeDescriptor { return Float32Descrip
 
 type float64Adapter struct{}
 
-func (a *float64Adapter) isDefault(v float64) bool { return v == 0 }
+func (a *float64Adapter) isDefault(input float64) bool { return input == 0 }
 
 func (a *float64Adapter) toJson(input float64, _ *string, out *strings.Builder) {
 	if math.IsInf(input, 0) || math.IsNaN(input) {
@@ -605,7 +605,7 @@ type timestampAdapter struct{}
 
 // isDefault returns true when the time corresponds to unix epoch (millis == 0),
 // matching the TypeScript default value Timestamp.UNIX_EPOCH.
-func (a *timestampAdapter) isDefault(v time.Time) bool { return v.UnixMilli() == 0 }
+func (a *timestampAdapter) isDefault(input time.Time) bool { return input.UnixMilli() == 0 }
 
 // toJson mirrors TypeScript TimestampSerializer.toJson:
 //
@@ -717,7 +717,7 @@ func encodeUint32(n uint32, out *binaryOutput) {
 
 type stringAdapter struct{}
 
-func (a *stringAdapter) isDefault(v string) bool { return v == "" }
+func (a *stringAdapter) isDefault(input string) bool { return input == "" }
 
 // toJson writes the string as a properly escaped JSON string. Same in both flavors.
 func (a *stringAdapter) toJson(input string, _ *string, out *strings.Builder) {
@@ -786,7 +786,7 @@ func (a *stringAdapter) typeDescriptor() TypeDescriptor { return StringDescripto
 
 type bytesAdapter struct{}
 
-func (a *bytesAdapter) isDefault(v Bytes) bool { return v.IsEmpty() }
+func (a *bytesAdapter) isDefault(input Bytes) bool { return input.IsEmpty() }
 
 // toJson mirrors TypeScript ByteStringSerializer.toJson:
 //
@@ -881,7 +881,7 @@ func NewArrayAdapter[E any](item typeAdapter[E], keyExtractor string) *arrayAdap
 	}
 }
 
-func (a *arrayAdapter[E]) isDefault(v Array[E]) bool { return v.IsEmpty() }
+func (a *arrayAdapter[E]) isDefault(input Array[E]) bool { return input.IsEmpty() }
 
 // toJson writes a JSON array. In readable mode each element is on its own
 // indented line; in dense mode elements are comma-separated with no whitespace.
@@ -1005,7 +1005,7 @@ func NewOptionalAdapter[E any](other typeAdapter[E]) *optionalAdapter[E] {
 	}
 }
 
-func (a *optionalAdapter[E]) isDefault(v Optional[E]) bool { return !v.IsPresent() }
+func (a *optionalAdapter[E]) isDefault(input Optional[E]) bool { return !input.IsPresent() }
 
 // toJson writes JSON null for nil; otherwise delegates to the inner adapter.
 func (a *optionalAdapter[E]) toJson(input Optional[E], eolIndent *string, out *strings.Builder) {

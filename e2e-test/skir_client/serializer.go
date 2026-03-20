@@ -70,7 +70,7 @@ func (s Serializer[T]) TypeDescriptor() TypeDescriptor {
 // (primitive, array, optional, struct, enum). It is unexported so that only
 // adapters defined inside this package can satisfy it.
 type typeAdapter[T any] interface {
-	isDefault(value T) bool
+	isDefault(input T) bool
 	// toJson writes the JSON representation of input to out.
 	// eolIndent is nil for dense (compact) mode; in readable mode it is
 	// "\n" followed by the indentation of the current nesting level.
