@@ -1,4 +1,3 @@
-// nit: In TypeAdapter, naming consistency of params (input vs value)
 // nit: format skir_client better by breaking lines at long param lists
 // nit: Address Go watnints: for loop can be modernized using range over int
 // _arrayWrapper_FromSlice
