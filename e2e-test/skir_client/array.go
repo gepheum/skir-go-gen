@@ -8,6 +8,8 @@ import (
 //
 // Unlike []T, an Array value cannot be modified after creation: callers cannot
 // append to it, remove from it, or overwrite individual elements.
+//
+// Elements must not be nil; [ArrayFromSlice] panics if any element is nil.
 type Array[T any] struct {
 	// A copy of the original slice is stored, so the caller cannot mutate the
 	// contents by keeping a reference to the original slice.
@@ -15,9 +17,15 @@ type Array[T any] struct {
 }
 
 // ArrayFromSlice returns an Array whose content is a copy of s.
+// Panics if any element of s is nil.
 func ArrayFromSlice[T any](s []T) Array[T] {
 	c := make([]T, len(s))
-	copy(c, s)
+	for i, v := range s {
+		if any(v) == nil {
+			panic("ArrayFromSlice: element must not be nil")
+		}
+		c[i] = v
+	}
 	return Array[T]{s: c}
 }
 
