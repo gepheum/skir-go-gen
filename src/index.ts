@@ -564,10 +564,16 @@ class GoSourceFileGenerator {
       const keyedArrayHelper = this.getKeyedArrayHelper(field);
       if (keyedArrayHelper) {
         this.push(
-          `  ${fieldAccess}_indexed = &atomic.Pointer[${keyedArrayHelper.mapType}]{}\n`,
+          `${fieldAccess}_indexed = &atomic.Pointer[${keyedArrayHelper.mapType}]{}\n`,
         );
       }
     } else {
+      if (this.isStructType(type)) {
+        const fieldName = convertCase(field.name.text, "UpperCamel");
+        this.push(`if ${varName} == nil {\n`);
+        this.push(`  panic("Set${fieldName}: value must not be nil")\n`);
+        this.push("}\n");
+      }
       this.push(`  ${fieldAccess} = ${varName}\n`);
     }
   }
