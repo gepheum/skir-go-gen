@@ -1,12 +1,9 @@
-// For indexed arrays, rename finder to FIeldName_Search?
-//   Make it return an Optional? It cannot return a pointet to the element!
+// Constant should not use pointers...
 // nit: In TypeAdapter, naming consistency of params (input vs value)
-// nit: in 'serializers', why do the adapter methods expect a pointer?
 // nit: format skir_client better by breaking lines at long param lists
-// Review Optional interface
-//   Rm valueOrDefault, just add ValueOr
 // _arrayWrapper_FromSlice
 //   Or actually: arrayWrapper(slice); arrayWrapper_NoCopy(slice)
+// and for optional fields: SetField_Absent(), SetField_Present(...)
 // Generate public symbols first, then internal...
 // Take a pass at all the code...
 // RPC code
@@ -182,12 +179,12 @@ class GoSourceFileGenerator {
     }
     // Search methods for keyed array fields belong in the interface too.
     for (const field of fields) {
-      const keyedArrayHelper = this.getKeyedArrayHelper(field.type!);
+      const keyedArrayHelper = this.getKeyedArrayHelper(field!);
       if (!keyedArrayHelper) continue;
-      const fieldName = convertCase(field.name.text, "UpperCamel");
+      const { searchMethodName } = keyedArrayHelper;
       const { exposedKeyType, itemType } = keyedArrayHelper;
       this.push(
-        `Search${fieldName}(k ${exposedKeyType}) skir_client.Optional[${itemType}]\n`,
+        `${searchMethodName}(k ${exposedKeyType}) skir_client.Optional[${itemType}]\n`,
       );
     }
     this.push(`ToBuilder() *${className}_partialBuilderType\n`);
@@ -202,7 +199,7 @@ class GoSourceFileGenerator {
       const fieldName = "_" + convertCase(field.name.text, "lowerCamel");
       const goType = typeSpeller.getGoType(field.type!);
       this.push(`${fieldName} ${goType}\n`);
-      const keyedArrayHelper = this.getKeyedArrayHelper(field.type!);
+      const keyedArrayHelper = this.getKeyedArrayHelper(field);
       if (keyedArrayHelper) {
         const { mapType } = keyedArrayHelper;
         this.push(`${fieldName}_indexed *atomic.Pointer[${mapType}]\n`);
@@ -248,9 +245,10 @@ class GoSourceFileGenerator {
 
     // Write the Search methods for keyed array fields.
     for (const field of fields) {
-      const keyedArrayHelper = this.getKeyedArrayHelper(field.type!);
+      const keyedArrayHelper = this.getKeyedArrayHelper(field);
       if (!keyedArrayHelper) continue;
       const {
+        searchMethodName,
         mapType,
         itemType,
         exposedKeyType,
@@ -262,12 +260,12 @@ class GoSourceFileGenerator {
       const indexingAccess = `${rawFieldAccess}_indexed`;
       this.push(
         commentify([
-          `Search${fieldName} returns the element in the ${fieldName} array whose key equals k.`,
+          `${searchMethodName} returns the last element in ${fieldName} whose key equals k.`,
           "Returns an absent Optional if no such element exists.",
         ]),
       );
       this.push(
-        `func (s *_${className}_impl) Search${fieldName}(k ${exposedKeyType}) skir_client.Optional[${itemType}] {\n`,
+        `func (s *_${className}_impl) ${searchMethodName}(k ${exposedKeyType}) skir_client.Optional[${itemType}] {\n`,
       );
       this.push(`indexingPtr := ${indexingAccess}\n`);
       this.push("m := indexingPtr.Load()\n");
@@ -281,9 +279,9 @@ class GoSourceFileGenerator {
       this.push("}\n");
       this.push(`v, ok := (*m)[${exposedKeyToComparableExpr}]\n`);
       this.push("if !ok {\n");
-      this.push(`return skir_client.Optional[${itemType}]{}\n`);
+      this.push(`return skir_client.Absent[${itemType}]()\n`);
       this.push("}\n");
-      this.push(`return skir_client.OptionalOf[${itemType}](v)\n`);
+      this.push(`return skir_client.OptionalOf(v)\n`);
       this.push("}\n\n");
     }
 
@@ -439,7 +437,7 @@ class GoSourceFileGenerator {
     this.push(`var _${className}_default_impl = _${className}_impl{\n`);
     for (const field of fields) {
       const fieldType = field.type!;
-      const keyedArrayHelper = this.getKeyedArrayHelper(fieldType);
+      const keyedArrayHelper = this.getKeyedArrayHelper(field);
       if (keyedArrayHelper) {
         const { mapType } = keyedArrayHelper;
         const fieldName = "_"
@@ -548,7 +546,7 @@ class GoSourceFileGenerator {
     if (type.kind === "array") {
       // Array: direct assignment + reset indexed cache if keyed
       this.push(`  ${fieldAccess} = ${varName}\n`);
-      const keyedArrayHelper = this.getKeyedArrayHelper(type);
+      const keyedArrayHelper = this.getKeyedArrayHelper(field);
       if (keyedArrayHelper) {
         this.push(
           `  ${fieldAccess}_indexed = &atomic.Pointer[${keyedArrayHelper.mapType}]{}\n`,
@@ -961,7 +959,8 @@ class GoSourceFileGenerator {
     }
   }
 
-  private getKeyedArrayHelper(type: ResolvedType): KeyedArrayHelper | null {
+  private getKeyedArrayHelper(field: Field): KeyedArrayHelper | null {
+    const type = field.type!;
     if (type.kind !== "array") {
       return null;
     }
@@ -969,14 +968,19 @@ class GoSourceFileGenerator {
     if (!key) {
       return null;
     }
-    const { typeSpeller } = this;
-    const itemType = typeSpeller.getGoType(type.item);
-    const makeMapType = (comp: string): string => `map[${comp}]${itemType}`;
+    const searchMethodName = convertCase(field.name.text, "UpperCamel")
+      .concat("_SearchBy")
+      .concat(
+        key.path.map((p) => convertCase(p.name.text, "UpperCamel")).join(""),
+      );
     const keyAccessor = "e.".concat(
       key.path
         .map((p) => structFieldToGetterName(p.name.text).concat("()"))
         .join("."),
     );
+    const { typeSpeller } = this;
+    const itemType = typeSpeller.getGoType(type.item);
+    const makeMapType = (comp: string): string => `map[${comp}]${itemType}`;
     const { keyType } = key;
     switch (keyType.kind) {
       case "primitive": {
@@ -991,6 +995,7 @@ class GoSourceFileGenerator {
             // The simple case: the key type is already comparable.
             const comparableType = typeSpeller.getGoType(keyType);
             return {
+              searchMethodName: searchMethodName,
               itemType: itemType,
               mapType: makeMapType(comparableType),
               exposedKeyType: comparableType,
@@ -1000,6 +1005,7 @@ class GoSourceFileGenerator {
           }
           case "timestamp":
             return {
+              searchMethodName: searchMethodName,
               itemType: itemType,
               mapType: makeMapType("int64"),
               exposedKeyType: "time.Time",
@@ -1008,6 +1014,7 @@ class GoSourceFileGenerator {
             };
           case "bytes":
             return {
+              searchMethodName: searchMethodName,
               itemType: itemType,
               mapType: makeMapType("string"),
               exposedKeyType: "skir_client.Bytes",
@@ -1020,6 +1027,7 @@ class GoSourceFileGenerator {
       case "record": {
         const comparableType = typeSpeller.getGoType(keyType).concat("_kind");
         return {
+          searchMethodName: searchMethodName,
           itemType: itemType,
           mapType: makeMapType(comparableType),
           exposedKeyType: comparableType,
@@ -1153,6 +1161,8 @@ class GoSourceFileGenerator {
 }
 
 interface KeyedArrayHelper {
+  /** Name of the generated Search method. */
+  readonly searchMethodName: string;
   /** Item (Go) type. */
   readonly itemType: string;
   /** Go type of the internal map. */
