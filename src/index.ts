@@ -1,6 +1,6 @@
-// Constant should not use pointers...
 // nit: In TypeAdapter, naming consistency of params (input vs value)
 // nit: format skir_client better by breaking lines at long param lists
+// nit: Address Go watnints: for loop can be modernized using range over int
 // _arrayWrapper_FromSlice
 //   Or actually: arrayWrapper(slice); arrayWrapper_NoCopy(slice)
 // and for optional fields: SetField_Absent(), SetField_Present(...)
