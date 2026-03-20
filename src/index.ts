@@ -1,8 +1,5 @@
 // Put the Items_Search() method right after Items()...
 // Take a pass at all the code...
-// Reflection
-// RPC code
-// Generate doc
 // set up CI
 // githubisation: one package?
 
