@@ -922,13 +922,15 @@ class GoSourceFileGenerator {
     );
     this.push(commentify(docToCommentText(method.doc)));
     this.push(
-      `var ${convertCase(name, "UpperCamel")}_method = skir_client.Method[${requestGoType}, ${responseGoType}]{\n`,
+      `func ${convertCase(name, "UpperCamel")}() skir_client.Method[${requestGoType}, ${responseGoType}]{\n`,
     );
-    this.push(`Name: ${toGoStringLiteral(name)},\n`);
-    this.push(`Number: ${method.number},\n`);
-    this.push(`RequestSerializer: ${requestSerializerExpr},\n`);
-    this.push(`ResponseSerializer: ${responseSerializerExpr},\n`);
-    this.push(`Doc: ${toGoStringLiteral(docToCommentText(method.doc))},\n`);
+    this.push("return skir_client.NewMethod(\n");
+    this.push(`${toGoStringLiteral(name)},\n`);
+    this.push(`${method.number},\n`);
+    this.push(`${requestSerializerExpr},\n`);
+    this.push(`${responseSerializerExpr},\n`);
+    this.push(`${toGoStringLiteral(docToCommentText(method.doc))},\n`);
+    this.push(")\n");
     this.push("}\n\n");
   }
 

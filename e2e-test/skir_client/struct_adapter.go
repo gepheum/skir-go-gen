@@ -80,7 +80,7 @@ func (f *typedField[T, Builder, V]) decodeEntry(builder Builder, in *binaryInput
 //
 // Usage: call NewStructAdapter, then AddField / AddRemovedNumber for each
 // field, then Finalize before using the adapter.
-type Internal__StructAdapter[T any, Builder any] struct {
+type Internal__StructAdapter[T, Builder any] struct {
 	defaultInstance   T
 	isDefaultInstance func(T) bool
 	newBuilder        func() Builder
