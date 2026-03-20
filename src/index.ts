@@ -1,5 +1,3 @@
-// I think I may be usign unknown instead of unrecognized in enum for some variant?
-// Make strict builder return a pointer to the held value??? Or is that dangerous? Is it possibe to hold a pointer to the old pointer at an unfinished state and then reset the value? I think so... SO maybe what I have is good, safer.
 // For indexed arrays, rename finder to FIeldName_Search?
 //   Make it return an Optional? It cannot return a pointet to the element!
 // nit: In TypeAdapter, naming consistency of params (input vs value)
@@ -367,7 +365,8 @@ class GoSourceFileGenerator {
 
     // Write the Build() method of the ordered builder.
     this.push(`func (b *_${className}_builder) Build() ${className} {\n`);
-    this.push("  return &b.s\n");
+    this.push("  copy := b.s\n");
+    this.push("  return &copy\n");
     this.push("}\n\n");
 
     // Write the builder factory function.
@@ -593,7 +592,7 @@ class GoSourceFileGenerator {
     // Define the value interface and its implementations.
     const valueInterfaceName = `_${className}_value`;
     this.push(`type ${valueInterfaceName} interface {\n`);
-    this.push(`UnwrapUnknown() *skir_client.Internal__UnrecognizedVariant\n`);
+    this.push(`GetUnrecognized() *skir_client.Internal__UnrecognizedVariant\n`);
     for (const variant of wrapperVariants) {
       const upperName = convertCase(variant.name.text, "UpperCamel");
       const goType = typeSpeller.getGoType(variant.type!);
@@ -606,7 +605,7 @@ class GoSourceFileGenerator {
     this.push(`v skir_client.Internal__UnrecognizedVariant\n`);
     this.push("}\n");
     this.push(
-      `func (w *${unknownImplName}) UnwrapUnknown() *skir_client.Internal__UnrecognizedVariant {\n`,
+      `func (w *${unknownImplName}) GetUnrecognized() *skir_client.Internal__UnrecognizedVariant {\n`,
     );
     this.push("return &w.v\n");
     this.push("}\n");
@@ -629,7 +628,7 @@ class GoSourceFileGenerator {
       this.push(`v ${goType}\n`);
       this.push("}\n");
       this.push(
-        `func (w *${implName}) UnwrapUnknown() *skir_client.Internal__UnrecognizedVariant {\n`,
+        `func (w *${implName}) GetUnrecognized() *skir_client.Internal__UnrecognizedVariant {\n`,
       );
       this.push("return nil\n");
       this.push("}\n");
@@ -855,7 +854,7 @@ class GoSourceFileGenerator {
         `if e.value == nil {\n` +
         `return nil\n` +
         `}\n` +
-        `return e.value.UnwrapUnknown()\n` +
+        `return e.value.GetUnrecognized()\n` +
         `},\n`,
     );
     this.push(")\n\n");
