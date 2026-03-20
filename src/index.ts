@@ -1,8 +1,6 @@
 // _arrayWrapper_FromSlice
-//   Or actually: arrayWrapper(slice); arrayWrapper_NoCopy(slice)
 //   and for optional fields: SetField_Absent(), SetField_Present(...)
-// WrapFoo should do nil check...
-// Check that enuns have String()
+// Put the Items_Search() method right after Items()...
 // Take a pass at all the code...
 // Reflection
 // RPC code
@@ -702,9 +700,13 @@ class GoSourceFileGenerator {
         ]),
       );
       const implName = `_${className}_value_${lowerName}Wrapper`;
-      this.push(
-        `func ${className}_${lowerName}Wrapper(v ${goType}) ${className} {\n`,
-      );
+      const wrapperFuncName = `${className}_${lowerName}Wrapper`;
+      this.push(`func ${wrapperFuncName}(v ${goType}) ${className} {\n`);
+      if (this.isStructType(variantType)) {
+        this.push("if v == nil {\n");
+        this.push(`  panic("${wrapperFuncName}: value must not be nil")\n`);
+        this.push("}\n");
+      }
       this.push(
         `return ${className}{kind: ${kindType}_${lowerName}Wrapper, value: &${implName}{v: v}}\n`,
       );
