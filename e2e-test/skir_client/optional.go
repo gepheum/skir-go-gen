@@ -1,5 +1,7 @@
 package skir_client
 
+import "fmt"
+
 // Optional[T] holds a value that may or may not be present.
 // It is deeply immutable when T is deeply immutable.
 type Optional[T any] struct {
@@ -7,14 +9,19 @@ type Optional[T any] struct {
 	present bool
 }
 
+// Absent returns an absent Optional. Equivalent to Optional[T]{}.
+func Absent[T any]() Optional[T] {
+	return Optional[T]{}
+}
+
 // OptionalOf returns an Optional containing v.
 func OptionalOf[T any](v T) Optional[T] {
 	return Optional[T]{value: v, present: true}
 }
 
-// OptionalOfPtr converts a pointer to an Optional:
+// OptionalOfNilable converts a possibly-nil pointer to an Optional:
 // nil pointer → absent, non-nil pointer → present with *p.
-func OptionalOfPtr[T any](p *T) Optional[T] {
+func OptionalOfNilable[T any](p *T) Optional[T] {
 	if p == nil {
 		return Optional[T]{}
 	}
@@ -24,9 +31,6 @@ func OptionalOfPtr[T any](p *T) Optional[T] {
 // IsPresent reports whether a value is present.
 func (o Optional[T]) IsPresent() bool { return o.present }
 
-// IsEmpty reports whether no value is present.
-func (o Optional[T]) IsEmpty() bool { return !o.present }
-
 // Get returns the value. Panics if not present.
 func (o Optional[T]) Get() T {
 	if !o.present {
@@ -35,7 +39,18 @@ func (o Optional[T]) Get() T {
 	return o.value
 }
 
-// GetOrDefault returns the value if present, or the zero value of T otherwise.
-func (o Optional[T]) GetOrDefault() T {
-	return o.value
+// GetOr returns the value if present, or the provided default value otherwise.
+func (o Optional[T]) GetOr(def T) T {
+	if o.present {
+		return o.value
+	} else {
+		return def
+	}
+}
+
+func (o Optional[T]) String() string {
+	if !o.present {
+		return "null"
+	}
+	return fmt.Sprint(o.value)
 }
