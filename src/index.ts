@@ -1,14 +1,15 @@
 // nit: format skir_client better by breaking lines at long param lists
-// nit: Address Go watnints: for loop can be modernized using range over int
+// Fail early if some dependencies are null?
+// Remove Absent()
 // _arrayWrapper_FromSlice
 //   Or actually: arrayWrapper(slice); arrayWrapper_NoCopy(slice)
-// and for optional fields: SetField_Absent(), SetField_Present(...)
-// Generate public symbols first, then internal...
+//   and for optional fields: SetField_Absent(), SetField_Present(...)
 // Take a pass at all the code...
-// RPC code
 // Reflection
+// RPC code
 // Generate doc
 // set up CI
+// githubisation: one package?
 
 import {
   type CodeGenerator,
@@ -205,10 +206,12 @@ class GoSourceFileGenerator {
       this.push(`type ${fieldToBuilderName(field)} interface {\n`);
       const returnType = fieldToBuilderName(nextField);
       this.push(commentify(docToCommentText(field.doc)));
-      this.push(`Set${fieldName}(v ${paramType}) ${returnType}\n`);
       if (fieldType.kind === "array") {
         const itemType = typeSpeller.getGoType(fieldType.item);
-        this.push(`Set${fieldName}_FromSlice(v []${itemType}) ${returnType}\n`);
+        this.push(`Set${fieldName}(v []${itemType}) ${returnType}\n`);
+        this.push(`Set${fieldName}_NoCopy(v ${paramType}) ${returnType}\n`);
+      } else {
+        this.push(`Set${fieldName}(v ${paramType}) ${returnType}\n`);
       }
       this.push("}\n\n");
     }
@@ -391,21 +394,28 @@ class GoSourceFileGenerator {
       const paramType = getInterfaceReturnType(field);
       const nextField = fields[i + 1];
       const returnType = fieldToBuilderName(nextField);
-      this.push(
-        `func (b *${builderName}) Set${fieldName}(v ${paramType}) ${returnType} {\n`,
-      );
       const fieldAccess = "b.s._" + convertCase(field.name.text, "lowerCamel");
-      this.writeBuilderSetterBody(field, fieldAccess, "v");
-      this.push("  return b\n");
-      this.push("}\n\n");
       if (fieldType.kind === "array") {
         const itemType = typeSpeller.getGoType(fieldType.item);
         this.push(
-          `func (b *${builderName}) Set${fieldName}_FromSlice(v []${itemType}) ${returnType} {\n`,
+          `func (b *${builderName}) Set${fieldName}(v []${itemType}) ${returnType} {\n`,
         );
         this.push(
-          `  return b.Set${fieldName}(skir_client.ArrayFromSlice(v))\n`,
+          `  return b.Set${fieldName}_NoCopy(skir_client.ArrayFromSlice(v))\n`,
         );
+        this.push("}\n\n");
+        this.push(
+          `func (b *${builderName}) Set${fieldName}_NoCopy(v ${paramType}) ${returnType} {\n`,
+        );
+        this.writeBuilderSetterBody(field, fieldAccess, "v");
+        this.push("  return b\n");
+        this.push("}\n\n");
+      } else {
+        this.push(
+          `func (b *${builderName}) Set${fieldName}(v ${paramType}) ${returnType} {\n`,
+        );
+        this.writeBuilderSetterBody(field, fieldAccess, "v");
+        this.push("  return b\n");
         this.push("}\n\n");
       }
     }
@@ -428,21 +438,28 @@ class GoSourceFileGenerator {
       const fieldType = field.type!;
       const paramType = getInterfaceReturnType(field);
       this.push(commentify(docToCommentText(field.doc)));
-      this.push(
-        `func (b *${builderTypeName}) Set${fieldName}(v ${paramType}) *${builderTypeName} {\n`,
-      );
       const fieldAccess = "b.s._" + convertCase(field.name.text, "lowerCamel");
-      this.writeBuilderSetterBody(field, fieldAccess, "v");
-      this.push("  return b\n");
-      this.push("}\n\n");
       if (fieldType.kind === "array") {
         const itemType = typeSpeller.getGoType(fieldType.item);
         this.push(
-          `func (b *${builderTypeName}) Set${fieldName}_FromSlice(v []${itemType}) *${builderTypeName} {\n`,
+          `func (b *${builderTypeName}) Set${fieldName}(v []${itemType}) *${builderTypeName} {\n`,
         );
         this.push(
-          `  return b.Set${fieldName}(skir_client.ArrayFromSlice(v))\n`,
+          `  return b.Set${fieldName}_NoCopy(skir_client.ArrayFromSlice(v))\n`,
         );
+        this.push("}\n\n");
+        this.push(
+          `func (b *${builderTypeName}) Set${fieldName}_NoCopy(v ${paramType}) *${builderTypeName} {\n`,
+        );
+        this.writeBuilderSetterBody(field, fieldAccess, "v");
+        this.push("  return b\n");
+        this.push("}\n\n");
+      } else {
+        this.push(
+          `func (b *${builderTypeName}) Set${fieldName}(v ${paramType}) *${builderTypeName} {\n`,
+        );
+        this.writeBuilderSetterBody(field, fieldAccess, "v");
+        this.push("  return b\n");
         this.push("}\n\n");
       }
     }

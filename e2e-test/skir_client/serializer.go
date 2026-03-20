@@ -6,8 +6,11 @@ import (
 	"github.com/valyala/fastjson"
 )
 
+// Readable is a tag type passed to ToJson to request human-readable (indented) output.
 type Readable struct{}
 
+// KeepUnrecognizedValues instructs FromJson and FromBytes to preserve fields and
+// variants from a newer schema version that are not recognised by this decoder.
 type KeepUnrecognizedValues struct{}
 
 // Serializer serialises and deserialises values of type T in both JSON and
@@ -22,6 +25,7 @@ func newSerializer[T any](a typeAdapter[T]) Serializer[T] {
 	return Serializer[T]{adapter: a}
 }
 
+// ToJson serialises v to a JSON string. Pass Readable{} for human-readable output.
 func (s Serializer[T]) ToJson(v T, flavor ...Readable) string {
 	var out strings.Builder
 	var eolIndent *string
@@ -33,6 +37,8 @@ func (s Serializer[T]) ToJson(v T, flavor ...Readable) string {
 	return out.String()
 }
 
+// FromJson deserialises a JSON string into a value of type T. Pass KeepUnrecognizedValues{}
+// to preserve fields from a newer schema version.
 func (s Serializer[T]) FromJson(code string, opts ...KeepUnrecognizedValues) (T, error) {
 	fv, err := fastjson.Parse(code)
 	if err != nil {
@@ -42,6 +48,7 @@ func (s Serializer[T]) FromJson(code string, opts ...KeepUnrecognizedValues) (T,
 	return s.adapter.fromJson(*fv, len(opts) > 0)
 }
 
+// ToBytes serialises v to the skir binary wire format.
 func (s Serializer[T]) ToBytes(v T) []byte {
 	out := binaryOutput{}
 	out.out.WriteString("skir")
@@ -49,6 +56,9 @@ func (s Serializer[T]) ToBytes(v T) []byte {
 	return out.out.Bytes()
 }
 
+// FromBytes deserialises a value from the skir binary wire format, falling back to JSON
+// if the payload lacks the "skir" prefix. Pass KeepUnrecognizedValues{} to preserve
+// fields from a newer schema version.
 func (s Serializer[T]) FromBytes(b []byte, opts ...KeepUnrecognizedValues) (T, error) {
 	if len(b) >= 4 && string(b[:4]) == "skir" {
 		in := newBinaryInput(b[4:], len(opts) > 0)
@@ -58,6 +68,7 @@ func (s Serializer[T]) FromBytes(b []byte, opts ...KeepUnrecognizedValues) (T, e
 	return s.FromJson(string(b), opts...)
 }
 
+// TypeDescriptor returns a descriptor that describes the schema of type T.
 func (s Serializer[T]) TypeDescriptor() TypeDescriptor {
 	return s.adapter.typeDescriptor()
 }

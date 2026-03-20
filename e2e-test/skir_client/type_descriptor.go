@@ -299,7 +299,13 @@ type StructDescriptor struct {
 	numberToField map[int]*StructField
 }
 
-func newStructDescriptor(modulePath, qualifiedName, doc string, removedNumbers map[int]struct{}, fields []*StructField) *StructDescriptor {
+func newStructDescriptor(
+	modulePath string,
+	qualifiedName string,
+	doc string,
+	removedNumbers map[int]struct{},
+	fields []*StructField,
+) *StructDescriptor {
 	name := qualifiedName
 	if i := lastDotIndex(qualifiedName); i >= 0 {
 		name = qualifiedName[i+1:]
@@ -368,7 +374,13 @@ type EnumDescriptor struct {
 	numberToVariant map[int]EnumVariant
 }
 
-func newEnumDescriptor(modulePath, qualifiedName, doc string, removedNumbers map[int]struct{}, variants []EnumVariant) *EnumDescriptor {
+func newEnumDescriptor(
+	modulePath string,
+	qualifiedName string,
+	doc string,
+	removedNumbers map[int]struct{},
+	variants []EnumVariant,
+) *EnumDescriptor {
 	name := qualifiedName
 	if i := lastDotIndex(qualifiedName); i >= 0 {
 		name = qualifiedName[i+1:]

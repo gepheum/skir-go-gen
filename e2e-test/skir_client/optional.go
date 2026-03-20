@@ -43,9 +43,8 @@ func (o Optional[T]) Get() T {
 func (o Optional[T]) GetOr(def T) T {
 	if o.present {
 		return o.value
-	} else {
-		return def
 	}
+	return def
 }
 
 func (o Optional[T]) String() string {

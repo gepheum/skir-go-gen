@@ -44,12 +44,20 @@ func (f *typedField[T, Builder, V]) isEntryDefault(frozen T) bool {
 	return f.adapter.isDefault(v)
 }
 
-func (f *typedField[T, Builder, V]) entryToJson(frozen T, eolIndent *string, out *strings.Builder) {
+func (f *typedField[T, Builder, V]) entryToJson(
+	frozen T,
+	eolIndent *string,
+	out *strings.Builder,
+) {
 	v := f.getter(frozen)
 	f.adapter.toJson(v, eolIndent, out)
 }
 
-func (f *typedField[T, Builder, V]) setEntryFromJson(builder Builder, fv fastjson.Value, keepUnrecognized bool) error {
+func (f *typedField[T, Builder, V]) setEntryFromJson(
+	builder Builder,
+	fv fastjson.Value,
+	keepUnrecognized bool,
+) error {
 	v, err := f.adapter.fromJson(fv, keepUnrecognized)
 	if err != nil {
 		return err
@@ -63,7 +71,11 @@ func (f *typedField[T, Builder, V]) encodeEntry(frozen T, out *binaryOutput) {
 	f.adapter.encode(v, out)
 }
 
-func (f *typedField[T, Builder, V]) decodeEntry(builder Builder, in *binaryInput, keepUnrecognized bool) {
+func (f *typedField[T, Builder, V]) decodeEntry(
+	builder Builder,
+	in *binaryInput,
+	keepUnrecognized bool,
+) {
 	v, _ := f.adapter.decode(in, keepUnrecognized)
 	f.setter(builder, v)
 }
@@ -285,7 +297,11 @@ func (a *Internal__StructAdapter[T, Builder]) toDenseJson(input T, out *strings.
 }
 
 // toReadableJson writes input as a JSON object, omitting default fields.
-func (a *Internal__StructAdapter[T, Builder]) toReadableJson(input T, eolIndent *string, out *strings.Builder) {
+func (a *Internal__StructAdapter[T, Builder]) toReadableJson(
+	input T,
+	eolIndent *string,
+	out *strings.Builder,
+) {
 	out.WriteByte('{')
 	childIndent := *eolIndent + "  "
 	first := true
@@ -333,7 +349,10 @@ func (a *Internal__StructAdapter[T, Builder]) fromJson(v fastjson.Value, keepUnr
 	}
 }
 
-func (a *Internal__StructAdapter[T, Builder]) fromDenseJson(arr fastjson.Value, keepUnrecognized bool) (T, error) {
+func (a *Internal__StructAdapter[T, Builder]) fromDenseJson(
+	arr fastjson.Value,
+	keepUnrecognized bool,
+) (T, error) {
 	items, err := arr.Array()
 	if err != nil {
 		return a.defaultInstance, err
