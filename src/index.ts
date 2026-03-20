@@ -192,6 +192,80 @@ class GoSourceFileGenerator {
     this.push(`isDefaultInstance() bool\n`);
     this.push("}\n\n");
 
+    // Define the builder interfaces.
+    const fieldToBuilderName = (f: Field | undefined): string =>
+      f
+        ? className + "_builderAt" + convertCase(f.name.text, "UpperCamel")
+        : className + "_builderDone";
+    for (const [i, field] of fields.entries()) {
+      const fieldName = convertCase(field.name.text, "UpperCamel");
+      const fieldType = field.type!;
+      const nextField = fields[i + 1];
+      const paramType = getInterfaceReturnType(field);
+      this.push(`type ${fieldToBuilderName(field)} interface {\n`);
+      const returnType = fieldToBuilderName(nextField);
+      this.push(commentify(docToCommentText(field.doc)));
+      this.push(`Set${fieldName}(v ${paramType}) ${returnType}\n`);
+      if (fieldType.kind === "array") {
+        const itemType = typeSpeller.getGoType(fieldType.item);
+        this.push(`Set${fieldName}_FromSlice(v []${itemType}) ${returnType}\n`);
+      }
+      this.push("}\n\n");
+    }
+    this.push(`type ${className}_builderDone interface {\n`);
+    this.push(`  Build() ${className}\n`);
+    this.push("}\n\n");
+
+    // Write the builder factory function.
+    this.push(
+      commentify([
+        `${className}_builder returns a new builder for constructing ${className} values.`,
+        "All fields must be set in alphabetical order before calling Build().",
+      ]),
+    );
+    this.push(
+      `func ${className}_builder() ${fieldToBuilderName(fields[0])} {\n`,
+    );
+    this.push(`  return &_${className}_builder{}\n`);
+    this.push("}\n\n");
+
+    // Write the partial builder factory function.
+    this.push(
+      commentify([
+        `${className}_partialBuilder returns a new builder for constructing ${className} values.`,
+        "All fields pre-initialized to their default values. Fields can be set in any order.",
+      ]),
+    );
+    this.push(
+      `func ${className}_partialBuilder() *${className}_partialBuilderType {\n`,
+    );
+    this.push(
+      `  return &${className}_partialBuilderType{s: _${className}_default_impl}\n`,
+    );
+    this.push("}\n\n");
+
+    this.push(
+      commentify([
+        `${className}_default returns the default ${className}.`,
+        "All fields are set to their default values.",
+      ]),
+    );
+    this.push(`func ${className}_default() ${className} {\n`);
+    this.push(`  return _${className}_default\n`);
+    this.push("}\n\n");
+
+    // Serializer function.
+    this.push(
+      commentify(
+        `${className}_serializer returns the serializer for ${className} values.`,
+      ),
+    );
+    this.push(
+      `func ${className}_serializer() skir_client.Serializer[${className}] {\n`,
+    );
+    this.push(`return _${className}_adapter.Serializer()\n`);
+    this.push("}\n\n");
+
     // Define the _impl struct.
     this.push(`type _${className}_impl struct {\n`);
     for (const field of fields) {
@@ -304,30 +378,6 @@ class GoSourceFileGenerator {
     this.push(`  return &${className}_partialBuilderType{s: *s}\n`);
     this.push("}\n\n");
 
-    // Define the builder interfaces.
-    const fieldToBuilderName = (f: Field | undefined): string =>
-      f
-        ? className + "_builderAt" + convertCase(f.name.text, "UpperCamel")
-        : className + "_builderDone";
-    for (const [i, field] of fields.entries()) {
-      const fieldName = convertCase(field.name.text, "UpperCamel");
-      const fieldType = field.type!;
-      const nextField = fields[i + 1];
-      const paramType = getInterfaceReturnType(field);
-      this.push(`type ${fieldToBuilderName(field)} interface {\n`);
-      const returnType = fieldToBuilderName(nextField);
-      this.push(commentify(docToCommentText(field.doc)));
-      this.push(`Set${fieldName}(v ${paramType}) ${returnType}\n`);
-      if (fieldType.kind === "array") {
-        const itemType = typeSpeller.getGoType(fieldType.item);
-        this.push(`Set${fieldName}_FromSlice(v []${itemType}) ${returnType}\n`);
-      }
-      this.push("}\n\n");
-    }
-    this.push(`type ${className}_builderDone interface {\n`);
-    this.push(`  Build() ${className}\n`);
-    this.push("}\n\n");
-
     // Define the builder struct (stores _impl internally).
     this.push(`type _${className}_builder struct {\n`);
     this.push(`s _${className}_impl\n`);
@@ -364,19 +414,6 @@ class GoSourceFileGenerator {
     this.push(`func (b *_${className}_builder) Build() ${className} {\n`);
     this.push("  copy := b.s\n");
     this.push("  return &copy\n");
-    this.push("}\n\n");
-
-    // Write the builder factory function.
-    this.push(
-      commentify([
-        `${className}_builder returns a new builder for constructing ${className} values.`,
-        "All fields must be set in alphabetical order before calling Build().",
-      ]),
-    );
-    this.push(
-      `func ${className}_builder() ${fieldToBuilderName(fields[0])} {\n`,
-    );
-    this.push(`  return &_${className}_builder{}\n`);
     this.push("}\n\n");
 
     // Define the partial builder type (stores _impl internally).
@@ -417,21 +454,6 @@ class GoSourceFileGenerator {
     this.push("  return &b.s\n");
     this.push("}\n\n");
 
-    // Write the partial builder factory function.
-    this.push(
-      commentify([
-        `${className}_partialBuilder returns a new builder for constructing ${className} values.`,
-        "All fields pre-initialized to their default values. Fields can be set in any order.",
-      ]),
-    );
-    this.push(
-      `func ${className}_partialBuilder() *${className}_partialBuilderType {\n`,
-    );
-    this.push(
-      `  return &${className}_partialBuilderType{s: _${className}_default_impl}\n`,
-    );
-    this.push("}\n\n");
-
     // Default _impl value.
     this.push(`var _${className}_default_impl = _${className}_impl{\n`);
     for (const field of fields) {
@@ -458,16 +480,6 @@ class GoSourceFileGenerator {
       `var _${className}_default ${className} = &_${className}_default_impl\n\n`,
     );
 
-    this.push(
-      commentify([
-        `${className}_default returns the default ${className}.`,
-        "All fields are set to their default values.",
-      ]),
-    );
-    this.push(`func ${className}_default() ${className} {\n`);
-    this.push(`  return _${className}_default\n`);
-    this.push("}\n\n");
-
     // Adapter (typed on the interface).
     const qualifiedRecordName = struct.recordAncestors
       .map((r) => r.name.text)
@@ -491,18 +503,6 @@ class GoSourceFileGenerator {
       `func(b *${className}_partialBuilderType, u *skir_client.Internal__UnrecognizedFields) { b.s.__unrecognized = u },\n`,
     );
     this.push(")\n\n");
-
-    // Serializer function.
-    this.push(
-      commentify(
-        `${className}_serializer returns the serializer for ${className} values.`,
-      ),
-    );
-    this.push(
-      `func ${className}_serializer() skir_client.Serializer[${className}] {\n`,
-    );
-    this.push(`return _${className}_adapter.Serializer()\n`);
-    this.push("}\n\n");
 
     // init() – initialize struct-type field defaults, add fields, finalize.
     this.push("func init() {\n");
@@ -568,6 +568,7 @@ class GoSourceFileGenerator {
     const constantVariants = variants.filter((v) => !v.type);
     const wrapperVariants = variants.filter((v) => v.type);
     const kindType = `${className}_kind`;
+    const valueInterfaceName = `_${className}_value`;
 
     // Define the Kind type and its constants.
     this.push(
@@ -585,65 +586,6 @@ class GoSourceFileGenerator {
       this.push(`${kindType}_${lowerName}Wrapper\n`);
     }
     this.push(")\n\n");
-
-    // Define the value interface and its implementations.
-    const valueInterfaceName = `_${className}_value`;
-    this.push(`type ${valueInterfaceName} interface {\n`);
-    this.push(`GetUnrecognized() *skir_client.Internal__UnrecognizedVariant\n`);
-    for (const variant of wrapperVariants) {
-      const upperName = convertCase(variant.name.text, "UpperCamel");
-      const goType = typeSpeller.getGoType(variant.type!);
-      this.push(`Unwrap${upperName}() *${goType}\n`);
-    }
-    this.push("}\n\n");
-    // Unknown implementation.
-    const unknownImplName = `_${className}_value_unknown`;
-    this.push(`type ${unknownImplName} struct {\n`);
-    this.push(`v skir_client.Internal__UnrecognizedVariant\n`);
-    this.push("}\n");
-    this.push(
-      `func (w *${unknownImplName}) GetUnrecognized() *skir_client.Internal__UnrecognizedVariant {\n`,
-    );
-    this.push("return &w.v\n");
-    this.push("}\n");
-    for (const variant of wrapperVariants) {
-      const upperName = convertCase(variant.name.text, "UpperCamel");
-      const goType = typeSpeller.getGoType(variant.type!);
-      this.push(
-        `func (w *${unknownImplName}) Unwrap${upperName}() *${goType} {\n`,
-      );
-      this.push("return nil\n");
-      this.push("}\n");
-    }
-    this.push("\n");
-    // Wrapper variant implementations.
-    for (const variant of wrapperVariants) {
-      const lowerName = convertCase(variant.name.text, "lowerCamel");
-      const implName = `_${className}_value_${lowerName}Wrapper`;
-      const goType = typeSpeller.getGoType(variant.type!);
-      this.push(`type ${implName} struct {\n`);
-      this.push(`v ${goType}\n`);
-      this.push("}\n");
-      this.push(
-        `func (w *${implName}) GetUnrecognized() *skir_client.Internal__UnrecognizedVariant {\n`,
-      );
-      this.push("return nil\n");
-      this.push("}\n");
-      for (const other of wrapperVariants) {
-        const otherUpperName = convertCase(other.name.text, "UpperCamel");
-        const otherGoType = typeSpeller.getGoType(other.type!);
-        this.push(
-          `func (w *${implName}) Unwrap${otherUpperName}() *${otherGoType} {\n`,
-        );
-        if (other.name.text === variant.name.text) {
-          this.push("return &w.v\n");
-        } else {
-          this.push("return nil\n");
-        }
-        this.push("}\n");
-      }
-      this.push("\n");
-    }
 
     // Define the frozen enum struct.
     this.push(
@@ -763,7 +705,7 @@ class GoSourceFileGenerator {
         `panic("${className}.Unwrap${upperName}(): kind is not ${upperName}Wrapper")\n`,
       );
       this.push("}\n");
-      this.push(`return *e.value.Unwrap${upperName}()\n`);
+      this.push(`return *e.value.unwrap${upperName}()\n`);
       this.push("}\n\n");
     }
 
@@ -825,6 +767,76 @@ class GoSourceFileGenerator {
     );
     this.push("}\n\n");
 
+    // Serializer function.
+    this.push(
+      commentify(
+        `${className}_serializer returns the serializer for ${className} values.`,
+      ),
+    );
+    this.push(
+      `func ${className}_serializer() skir_client.Serializer[${className}] {\n`,
+    );
+    this.push(`return _${className}_adapter.Serializer()\n`);
+    this.push("}\n\n");
+
+    // Define the value interface and its implementations.
+    this.push(`type ${valueInterfaceName} interface {\n`);
+    this.push(`getUnrecognized() *skir_client.Internal__UnrecognizedVariant\n`);
+    for (const variant of wrapperVariants) {
+      const upperName = convertCase(variant.name.text, "UpperCamel");
+      const goType = typeSpeller.getGoType(variant.type!);
+      this.push(`unwrap${upperName}() *${goType}\n`);
+    }
+    this.push("}\n\n");
+    // Unknown implementation.
+    const unknownImplName = `_${className}_value_unknown`;
+    this.push(`type ${unknownImplName} struct {\n`);
+    this.push(`v skir_client.Internal__UnrecognizedVariant\n`);
+    this.push("}\n");
+    this.push(
+      `func (w *${unknownImplName}) getUnrecognized() *skir_client.Internal__UnrecognizedVariant {\n`,
+    );
+    this.push("return &w.v\n");
+    this.push("}\n");
+    for (const variant of wrapperVariants) {
+      const upperName = convertCase(variant.name.text, "UpperCamel");
+      const goType = typeSpeller.getGoType(variant.type!);
+      this.push(
+        `func (w *${unknownImplName}) unwrap${upperName}() *${goType} {\n`,
+      );
+      this.push("return nil\n");
+      this.push("}\n");
+    }
+    this.push("\n");
+    // Wrapper variant implementations.
+    for (const variant of wrapperVariants) {
+      const lowerName = convertCase(variant.name.text, "lowerCamel");
+      const implName = `_${className}_value_${lowerName}Wrapper`;
+      const goType = typeSpeller.getGoType(variant.type!);
+      this.push(`type ${implName} struct {\n`);
+      this.push(`v ${goType}\n`);
+      this.push("}\n");
+      this.push(
+        `func (w *${implName}) getUnrecognized() *skir_client.Internal__UnrecognizedVariant {\n`,
+      );
+      this.push("return nil\n");
+      this.push("}\n");
+      for (const other of wrapperVariants) {
+        const otherUpperName = convertCase(other.name.text, "UpperCamel");
+        const otherGoType = typeSpeller.getGoType(other.type!);
+        this.push(
+          `func (w *${implName}) unwrap${otherUpperName}() *${otherGoType} {\n`,
+        );
+        if (other.name.text === variant.name.text) {
+          this.push("return &w.v\n");
+        } else {
+          this.push("return nil\n");
+        }
+        this.push("}\n");
+      }
+      this.push("\n");
+    }
+
     // Adapter.
     const qualifiedRecordName = record.recordAncestors
       .map((r) => r.name.text)
@@ -851,22 +863,10 @@ class GoSourceFileGenerator {
         `if e.value == nil {\n` +
         `return nil\n` +
         `}\n` +
-        `return e.value.GetUnrecognized()\n` +
+        `return e.value.getUnrecognized()\n` +
         `},\n`,
     );
     this.push(")\n\n");
-
-    // Serializer function.
-    this.push(
-      commentify(
-        `${className}_serializer returns the serializer for ${className} values.`,
-      ),
-    );
-    this.push(
-      `func ${className}_serializer() skir_client.Serializer[${className}] {\n`,
-    );
-    this.push(`return _${className}_adapter.Serializer()\n`);
-    this.push("}\n\n");
 
     // init() – register variants and finalize.
     this.push("func init() {\n");
@@ -949,13 +949,13 @@ class GoSourceFileGenerator {
       const goStringLiteral = toGoStringLiteral(
         JSON.stringify(constant.valueAsDenseJson),
       );
+      this.push(`func ${goName}() ${goType} {\n`);
+      this.push(`  return _${goName}\n`);
+      this.push("}\n\n");
       this.push(`var _${goName} ${goType}\n\n`);
       this.push("func init() {\n");
       this.push(`  v, _ := ${serializerExpr}.FromJson(${goStringLiteral})\n`);
       this.push(`  _${goName} = v\n`);
-      this.push("}\n\n");
-      this.push(`func ${goName}() ${goType} {\n`);
-      this.push(`  return _${goName}\n`);
       this.push("}\n\n");
     }
   }
