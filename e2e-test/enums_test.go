@@ -1011,12 +1011,12 @@ func TestWeekday_TypeDescriptor_IsEnumDescriptor(t *testing.T) {
 	if !ok {
 		t.Fatalf("TypeDescriptor is %T, want *skir_client.EnumDescriptor", td)
 	}
-	if ed.GetName() != "Weekday" {
-		t.Errorf("GetName: got %q, want Weekday", ed.GetName())
+	if ed.Name() != "Weekday" {
+		t.Errorf("Name: got %q, want Weekday", ed.Name())
 	}
 	// 7 named constants + unknown variant = 7 variants listed
-	if len(ed.GetVariants()) != 7 {
-		t.Errorf("GetVariants: got %d, want 7", len(ed.GetVariants()))
+	if len(ed.Variants()) != 7 {
+		t.Errorf("Variants: got %d, want 7", len(ed.Variants()))
 	}
 }
 
@@ -1026,12 +1026,12 @@ func TestJsonValue_TypeDescriptor_IsEnumDescriptor(t *testing.T) {
 	if !ok {
 		t.Fatalf("TypeDescriptor is %T, want *skir_client.EnumDescriptor", td)
 	}
-	if ed.GetName() != "JsonValue" {
-		t.Errorf("GetName: got %q, want JsonValue", ed.GetName())
+	if ed.Name() != "JsonValue" {
+		t.Errorf("Name: got %q, want JsonValue", ed.Name())
 	}
 	// null (constant) + array, boolean, number, object, string (wrappers) = 6 variants
-	if len(ed.GetVariants()) != 6 {
-		t.Errorf("GetVariants: got %d, want 6", len(ed.GetVariants()))
+	if len(ed.Variants()) != 6 {
+		t.Errorf("Variants: got %d, want 6", len(ed.Variants()))
 	}
 }
 

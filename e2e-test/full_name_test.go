@@ -407,89 +407,89 @@ func TestFullName_TypeDescriptor_IsStructDescriptor(t *testing.T) {
 func TestFullName_TypeDescriptor_Metadata(t *testing.T) {
 	sd := full_name.FullName_serializer().TypeDescriptor().(*skir_client.StructDescriptor)
 
-	if got := sd.GetName(); got != "FullName" {
-		t.Errorf("GetName: got %q, want %q", got, "FullName")
+	if got := sd.Name(); got != "FullName" {
+		t.Errorf("Name: got %q, want %q", got, "FullName")
 	}
-	if got := sd.GetQualifiedName(); got != "FullName" {
-		t.Errorf("GetQualifiedName: got %q, want %q", got, "FullName")
+	if got := sd.QualifiedName(); got != "FullName" {
+		t.Errorf("QualifiedName: got %q, want %q", got, "FullName")
 	}
-	if got := sd.GetModulePath(); got != "full_name.skir" {
-		t.Errorf("GetModulePath: got %q, want %q", got, "full_name.skir")
+	if got := sd.ModulePath(); got != "full_name.skir" {
+		t.Errorf("ModulePath: got %q, want %q", got, "full_name.skir")
 	}
-	if got := sd.GetDoc(); got != "A person's full name." {
-		t.Errorf("GetDoc: got %q, want %q", got, "A person's full name.")
+	if got := sd.Doc(); got != "A person's full name." {
+		t.Errorf("Doc: got %q, want %q", got, "A person's full name.")
 	}
 }
 
 func TestFullName_TypeDescriptor_Fields(t *testing.T) {
 	sd := full_name.FullName_serializer().TypeDescriptor().(*skir_client.StructDescriptor)
-	fields := sd.GetFields()
+	fields := sd.Fields()
 	if len(fields) != 2 {
-		t.Fatalf("GetFields: got %d fields, want 2", len(fields))
+		t.Fatalf("Fields: got %d fields, want 2", len(fields))
 	}
 
 	f0 := fields[0]
-	if f0.GetName() != "first_name" {
-		t.Errorf("fields[0].GetName: got %q, want %q", f0.GetName(), "first_name")
+	if f0.Name() != "first_name" {
+		t.Errorf("fields[0].Name: got %q, want %q", f0.Name(), "first_name")
 	}
-	if f0.GetNumber() != 0 {
-		t.Errorf("fields[0].GetNumber: got %d, want 0", f0.GetNumber())
+	if f0.Number() != 0 {
+		t.Errorf("fields[0].Number: got %d, want 0", f0.Number())
 	}
-	if f0.GetDoc() != "The first name." {
-		t.Errorf("fields[0].GetDoc: got %q, want %q", f0.GetDoc(), "The first name.")
+	if f0.Doc() != "The first name." {
+		t.Errorf("fields[0].Doc: got %q, want %q", f0.Doc(), "The first name.")
 	}
-	pd0, ok := f0.GetType().(*skir_client.PrimitiveDescriptor)
+	pd0, ok := f0.Type().(*skir_client.PrimitiveDescriptor)
 	if !ok {
-		t.Errorf("fields[0].GetType() is %T, want *PrimitiveDescriptor", f0.GetType())
-	} else if pd0.GetPrimitiveType() != skir_client.PrimitiveTypeString {
-		t.Errorf("fields[0] PrimitiveType: got %v, want string", pd0.GetPrimitiveType())
+		t.Errorf("fields[0].Type() is %T, want *PrimitiveDescriptor", f0.Type())
+	} else if pd0.PrimitiveType() != skir_client.PrimitiveTypeString {
+		t.Errorf("fields[0] PrimitiveType: got %v, want string", pd0.PrimitiveType())
 	}
 
 	f1 := fields[1]
-	if f1.GetName() != "last_name" {
-		t.Errorf("fields[1].GetName: got %q, want %q", f1.GetName(), "last_name")
+	if f1.Name() != "last_name" {
+		t.Errorf("fields[1].Name: got %q, want %q", f1.Name(), "last_name")
 	}
-	if f1.GetNumber() != 1 {
-		t.Errorf("fields[1].GetNumber: got %d, want 1", f1.GetNumber())
+	if f1.Number() != 1 {
+		t.Errorf("fields[1].Number: got %d, want 1", f1.Number())
 	}
-	if f1.GetDoc() != "The last\nname." {
-		t.Errorf("fields[1].GetDoc: got %q, want %q", f1.GetDoc(), "The last\nname.")
+	if f1.Doc() != "The last\nname." {
+		t.Errorf("fields[1].Doc: got %q, want %q", f1.Doc(), "The last\nname.")
 	}
-	pd1, ok := f1.GetType().(*skir_client.PrimitiveDescriptor)
+	pd1, ok := f1.Type().(*skir_client.PrimitiveDescriptor)
 	if !ok {
-		t.Errorf("fields[1].GetType() is %T, want *PrimitiveDescriptor", f1.GetType())
-	} else if pd1.GetPrimitiveType() != skir_client.PrimitiveTypeString {
-		t.Errorf("fields[1] PrimitiveType: got %v, want string", pd1.GetPrimitiveType())
+		t.Errorf("fields[1].Type() is %T, want *PrimitiveDescriptor", f1.Type())
+	} else if pd1.PrimitiveType() != skir_client.PrimitiveTypeString {
+		t.Errorf("fields[1] PrimitiveType: got %v, want string", pd1.PrimitiveType())
 	}
 }
 
 func TestFullName_TypeDescriptor_GetFieldByName(t *testing.T) {
 	sd := full_name.FullName_serializer().TypeDescriptor().(*skir_client.StructDescriptor)
 
-	f := sd.GetFieldByName("first_name")
+	f := sd.FieldByName("first_name")
 	if f == nil {
-		t.Fatal("GetFieldByName(\"first_name\"): got nil")
+		t.Fatal("FieldByName(\"first_name\"): got nil")
 	}
-	if f.GetNumber() != 0 {
-		t.Errorf("GetFieldByName(\"first_name\").GetNumber: got %d, want 0", f.GetNumber())
+	if f.Number() != 0 {
+		t.Errorf("FieldByName(\"first_name\").Number: got %d, want 0", f.Number())
 	}
-	if sd.GetFieldByName("nonexistent") != nil {
-		t.Error("GetFieldByName(\"nonexistent\"): expected nil, got non-nil")
+	if sd.FieldByName("nonexistent") != nil {
+		t.Error("FieldByName(\"nonexistent\"): expected nil, got non-nil")
 	}
 }
 
 func TestFullName_TypeDescriptor_GetFieldByNumber(t *testing.T) {
 	sd := full_name.FullName_serializer().TypeDescriptor().(*skir_client.StructDescriptor)
 
-	f := sd.GetFieldByNumber(1)
+	f := sd.FieldByNumber(1)
 	if f == nil {
-		t.Fatal("GetFieldByNumber(1): got nil")
+		t.Fatal("FieldByNumber(1): got nil")
 	}
-	if f.GetName() != "last_name" {
-		t.Errorf("GetFieldByNumber(1).GetName: got %q, want %q", f.GetName(), "last_name")
+	if f.Name() != "last_name" {
+		t.Errorf("FieldByNumber(1).Name: got %q, want %q", f.Name(), "last_name")
 	}
-	if sd.GetFieldByNumber(99) != nil {
-		t.Error("GetFieldByNumber(99): expected nil, got non-nil")
+	if sd.FieldByNumber(99) != nil {
+		t.Error("FieldByNumber(99): expected nil, got non-nil")
 	}
 }
 

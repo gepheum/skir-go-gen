@@ -84,8 +84,8 @@ type PrimitiveDescriptor struct {
 	primitiveType PrimitiveType
 }
 
-// GetPrimitiveType returns the PrimitiveType value.
-func (d *PrimitiveDescriptor) GetPrimitiveType() PrimitiveType { return d.primitiveType }
+// PrimitiveType returns the PrimitiveType value.
+func (d *PrimitiveDescriptor) PrimitiveType() PrimitiveType { return d.primitiveType }
 
 // Singleton instances – one per primitive type.
 var (
@@ -139,8 +139,8 @@ type OptionalDescriptor struct {
 	otherType TypeDescriptor
 }
 
-// GetOtherType returns the type descriptor for the wrapped non-null type.
-func (d *OptionalDescriptor) GetOtherType() TypeDescriptor { return d.otherType }
+// OtherType returns the type descriptor for the wrapped non-null type.
+func (d *OptionalDescriptor) OtherType() TypeDescriptor { return d.otherType }
 
 func (d *OptionalDescriptor) sealTypeDescriptor() {}
 func (d *OptionalDescriptor) AsJson() string      { return typeDescriptorToJson(d) }
@@ -159,30 +159,14 @@ type ArrayDescriptor struct {
 	keyExtractor string
 }
 
-// GetItemType returns the type descriptor for each array element.
-func (d *ArrayDescriptor) GetItemType() TypeDescriptor { return d.itemType }
+// ItemType returns the type descriptor for each array element.
+func (d *ArrayDescriptor) ItemType() TypeDescriptor { return d.itemType }
 
-// GetKeyExtractor returns the key chain string, or empty if none.
-func (d *ArrayDescriptor) GetKeyExtractor() string { return d.keyExtractor }
+// KeyExtractor returns the key chain string, or empty if none.
+func (d *ArrayDescriptor) KeyExtractor() string { return d.keyExtractor }
 
 func (d *ArrayDescriptor) sealTypeDescriptor() {}
 func (d *ArrayDescriptor) AsJson() string      { return typeDescriptorToJson(d) }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FieldOrVariant
-// ─────────────────────────────────────────────────────────────────────────────
-
-// FieldOrVariant is the common interface for struct fields and enum variants.
-type FieldOrVariant interface {
-	// Name of the field/variant as specified in the '.skir' file.
-	GetName() string
-
-	// Number used for binary serialization.
-	GetNumber() int
-
-	// Documentation extracted from doc comments in the '.skir' file.
-	GetDoc() string
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // StructField
@@ -196,10 +180,10 @@ type StructField struct {
 	doc       string
 }
 
-func (f *StructField) GetName() string         { return f.name }
-func (f *StructField) GetNumber() int          { return f.number }
-func (f *StructField) GetType() TypeDescriptor { return f.fieldType }
-func (f *StructField) GetDoc() string          { return f.doc }
+func (f *StructField) Name() string         { return f.name }
+func (f *StructField) Number() int          { return f.number }
+func (f *StructField) Type() TypeDescriptor { return f.fieldType }
+func (f *StructField) Doc() string          { return f.doc }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EnumVariant – sealed interface
@@ -208,7 +192,9 @@ func (f *StructField) GetDoc() string          { return f.doc }
 // EnumVariant is the common interface for skir enum variants.
 // Concrete types: *EnumConstantVariant, *EnumWrapperVariant.
 type EnumVariant interface {
-	FieldOrVariant
+	Name() string
+	Number() int
+	Doc() string
 	sealEnumVariant()
 }
 
@@ -223,9 +209,9 @@ type EnumConstantVariant struct {
 	doc    string
 }
 
-func (v *EnumConstantVariant) GetName() string  { return v.name }
-func (v *EnumConstantVariant) GetNumber() int   { return v.number }
-func (v *EnumConstantVariant) GetDoc() string   { return v.doc }
+func (v *EnumConstantVariant) Name() string     { return v.name }
+func (v *EnumConstantVariant) Number() int      { return v.number }
+func (v *EnumConstantVariant) Doc() string      { return v.doc }
 func (v *EnumConstantVariant) sealEnumVariant() {}
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -240,11 +226,11 @@ type EnumWrapperVariant struct {
 	doc         string
 }
 
-func (v *EnumWrapperVariant) GetName() string         { return v.name }
-func (v *EnumWrapperVariant) GetNumber() int          { return v.number }
-func (v *EnumWrapperVariant) GetType() TypeDescriptor { return v.variantType }
-func (v *EnumWrapperVariant) GetDoc() string          { return v.doc }
-func (v *EnumWrapperVariant) sealEnumVariant()        {}
+func (v *EnumWrapperVariant) Name() string         { return v.name }
+func (v *EnumWrapperVariant) Number() int          { return v.number }
+func (v *EnumWrapperVariant) Type() TypeDescriptor { return v.variantType }
+func (v *EnumWrapperVariant) Doc() string          { return v.doc }
+func (v *EnumWrapperVariant) sealEnumVariant()     {}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RecordDescriptorBase
@@ -255,21 +241,21 @@ type RecordDescriptorBase interface {
 	TypeDescriptor
 
 	// Name of the record as specified in the '.skir' file.
-	GetName() string
+	Name() string
 
 	// QualifiedName contains all names in the hierarchical sequence, e.g.
 	// "Foo.Bar" if Bar is nested within Foo, or simply "Bar" for top-level.
-	GetQualifiedName() string
+	QualifiedName() string
 
 	// ModulePath is the path to the '.skir' file relative to the skir source root.
-	GetModulePath() string
+	ModulePath() string
 
 	// Doc is the documentation extracted from doc comments in the '.skir' file.
-	GetDoc() string
+	Doc() string
 
 	// RemovedNumbers returns the set of field/variant numbers that have been
 	// marked as removed (reserved).
-	GetRemovedNumbers() map[int]struct{}
+	RemovedNumbers() map[int]struct{}
 
 	// recordId returns "modulePath:qualifiedName".
 	recordId() string
@@ -315,13 +301,13 @@ func newStructDescriptor(
 	}
 }
 
-func (d *StructDescriptor) sealTypeDescriptor()                 {}
-func (d *StructDescriptor) GetName() string                     { return d.name }
-func (d *StructDescriptor) GetQualifiedName() string            { return d.qualifiedName }
-func (d *StructDescriptor) GetModulePath() string               { return d.modulePath }
-func (d *StructDescriptor) GetDoc() string                      { return d.doc }
-func (d *StructDescriptor) GetRemovedNumbers() map[int]struct{} { return d.removedNumbers }
-func (d *StructDescriptor) GetFields() []*StructField           { return d.fields }
+func (d *StructDescriptor) sealTypeDescriptor()              {}
+func (d *StructDescriptor) Name() string                     { return d.name }
+func (d *StructDescriptor) QualifiedName() string            { return d.qualifiedName }
+func (d *StructDescriptor) ModulePath() string               { return d.modulePath }
+func (d *StructDescriptor) Doc() string                      { return d.doc }
+func (d *StructDescriptor) RemovedNumbers() map[int]struct{} { return d.removedNumbers }
+func (d *StructDescriptor) Fields() []*StructField           { return d.fields }
 func (d *StructDescriptor) recordId() string                    { return d.modulePath + ":" + d.qualifiedName }
 func (d *StructDescriptor) AsJson() string                      { return typeDescriptorToJson(d) }
 
@@ -338,14 +324,14 @@ func (d *StructDescriptor) initLookups() {
 	})
 }
 
-// GetFieldByName returns the field with the given name, or nil if not found.
-func (d *StructDescriptor) GetFieldByName(name string) *StructField {
+// FieldByName returns the field with the given name, or nil if not found.
+func (d *StructDescriptor) FieldByName(name string) *StructField {
 	d.initLookups()
 	return d.nameToField[name]
 }
 
-// GetFieldByNumber returns the field with the given number, or nil if not found.
-func (d *StructDescriptor) GetFieldByNumber(number int) *StructField {
+// FieldByNumber returns the field with the given number, or nil if not found.
+func (d *StructDescriptor) FieldByNumber(number int) *StructField {
 	d.initLookups()
 	return d.numberToField[number]
 }
@@ -390,13 +376,13 @@ func newEnumDescriptor(
 	}
 }
 
-func (d *EnumDescriptor) sealTypeDescriptor()                 {}
-func (d *EnumDescriptor) GetName() string                     { return d.name }
-func (d *EnumDescriptor) GetQualifiedName() string            { return d.qualifiedName }
-func (d *EnumDescriptor) GetModulePath() string               { return d.modulePath }
-func (d *EnumDescriptor) GetDoc() string                      { return d.doc }
-func (d *EnumDescriptor) GetRemovedNumbers() map[int]struct{} { return d.removedNumbers }
-func (d *EnumDescriptor) GetVariants() []EnumVariant          { return d.variants }
+func (d *EnumDescriptor) sealTypeDescriptor()              {}
+func (d *EnumDescriptor) Name() string                     { return d.name }
+func (d *EnumDescriptor) QualifiedName() string            { return d.qualifiedName }
+func (d *EnumDescriptor) ModulePath() string               { return d.modulePath }
+func (d *EnumDescriptor) Doc() string                      { return d.doc }
+func (d *EnumDescriptor) RemovedNumbers() map[int]struct{} { return d.removedNumbers }
+func (d *EnumDescriptor) Variants() []EnumVariant          { return d.variants }
 func (d *EnumDescriptor) recordId() string                    { return d.modulePath + ":" + d.qualifiedName }
 func (d *EnumDescriptor) AsJson() string                      { return typeDescriptorToJson(d) }
 
@@ -405,22 +391,22 @@ func (d *EnumDescriptor) initLookups() {
 		nm := make(map[string]EnumVariant, len(d.variants))
 		num := make(map[int]EnumVariant, len(d.variants))
 		for _, v := range d.variants {
-			nm[v.GetName()] = v
-			num[v.GetNumber()] = v
+			nm[v.Name()] = v
+			num[v.Number()] = v
 		}
 		d.nameToVariant = nm
 		d.numberToVariant = num
 	})
 }
 
-// GetVariantByName returns the variant with the given name, or nil if not found.
-func (d *EnumDescriptor) GetVariantByName(name string) EnumVariant {
+// VariantByName returns the variant with the given name, or nil if not found.
+func (d *EnumDescriptor) VariantByName(name string) EnumVariant {
 	d.initLookups()
 	return d.nameToVariant[name]
 }
 
-// GetVariantByNumber returns the variant with the given number, or nil if not found.
-func (d *EnumDescriptor) GetVariantByNumber(number int) EnumVariant {
+// VariantByNumber returns the variant with the given number, or nil if not found.
+func (d *EnumDescriptor) VariantByNumber(number int) EnumVariant {
 	d.initLookups()
 	return d.numberToVariant[number]
 }
@@ -585,7 +571,7 @@ func writeEnumRecordJson(v *EnumDescriptor, indent string, out *strings.Builder)
 	sorted := make([]EnumVariant, len(v.variants))
 	copy(sorted, v.variants)
 	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].GetNumber() < sorted[j].GetNumber()
+		return sorted[i].Number() < sorted[j].Number()
 	})
 	for i, variant := range sorted {
 		if i > 0 {
@@ -594,19 +580,19 @@ func writeEnumRecordJson(v *EnumDescriptor, indent string, out *strings.Builder)
 		out.WriteString("\n")
 		out.WriteString(variantIndent + "{\n")
 		out.WriteString(variantBody + "\"name\": ")
-		writeJsonEscapedString(variant.GetName(), out)
+		writeJsonEscapedString(variant.Name(), out)
 		out.WriteString(",\n")
 		out.WriteString(variantBody + "\"number\": ")
-		out.WriteString(strconv.Itoa(variant.GetNumber()))
+		out.WriteString(strconv.Itoa(variant.Number()))
 		if w, ok := variant.(*EnumWrapperVariant); ok {
 			out.WriteString(",\n")
 			out.WriteString(variantBody + "\"type\": ")
 			typeSignatureToJson(w.variantType, variantBody, out)
 		}
-		if variant.GetDoc() != "" {
+		if variant.Doc() != "" {
 			out.WriteString(",\n")
 			out.WriteString(variantBody + "\"doc\": ")
-			writeJsonEscapedString(variant.GetDoc(), out)
+			writeJsonEscapedString(variant.Doc(), out)
 		}
 		out.WriteString("\n")
 		out.WriteString(variantIndent + "}")
