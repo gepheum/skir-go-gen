@@ -1,4 +1,5 @@
-// fooWrapper -> wrapFoo
+// Look at "_Unknown"
+// _arrayWrapper_FromSlice
 // Generate public symbols first, then internal...
 // Take a pass at all the code...
 // RPC code
@@ -681,11 +682,11 @@ class GoSourceFileGenerator {
     // Factory functions for constant variants.
     this.push(
       commentify([
-        `${className}_Unknown creates an instance holding the unknown variant.`,
+        `${className}_unknown creates an instance holding the unknown variant.`,
         `It is the default value for fields of type ${className}.`,
       ]),
     );
-    this.push(`func ${className}_Unknown() ${className} {\n`);
+    this.push(`func ${className}_unknown() ${className} {\n`);
     this.push(`return ${className}{}\n`);
     this.push("}\n\n");
     for (const variant of constantVariants) {
