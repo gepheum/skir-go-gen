@@ -2,10 +2,10 @@ package skir_client
 
 import "testing"
 
-func TestAbsent_isNotPresent(t *testing.T) {
-	o := Absent[int]()
+func TestOptional_zeroValue_isNotPresent(t *testing.T) {
+	o := Optional[int]{}
 	if o.IsPresent() {
-		t.Fatal("expected IsPresent false for Absent()")
+		t.Fatal("expected IsPresent false for zero Optional")
 	}
 }
 
@@ -23,13 +23,13 @@ func TestOptionalOf_Get(t *testing.T) {
 	}
 }
 
-func TestAbsent_Get_panics(t *testing.T) {
+func TestOptional_zeroValue_Get_panics(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
 			t.Fatal("expected panic on Get() of absent Optional")
 		}
 	}()
-	Absent[int]().Get()
+	Optional[int]{}.Get()
 }
 
 func TestOptionalOfNilable_nil(t *testing.T) {
@@ -58,7 +58,7 @@ func TestGetOr_present(t *testing.T) {
 }
 
 func TestGetOr_absent(t *testing.T) {
-	o := Absent[int]()
+	o := Optional[int]{}
 	if got := o.GetOr(42); got != 42 {
 		t.Fatalf("GetOr() = %d, want 42", got)
 	}
@@ -72,7 +72,7 @@ func TestString_present(t *testing.T) {
 }
 
 func TestString_absent(t *testing.T) {
-	o := Absent[int]()
+	o := Optional[int]{}
 	if got := o.String(); got != "null" {
 		t.Fatalf("String() = %q, want %q", got, "null")
 	}

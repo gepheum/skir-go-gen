@@ -1,9 +1,7 @@
-// nit: format skir_client better by breaking lines at long param lists
-// Fail early if some dependencies are null?
-// Remove Absent()
 // _arrayWrapper_FromSlice
 //   Or actually: arrayWrapper(slice); arrayWrapper_NoCopy(slice)
 //   and for optional fields: SetField_Absent(), SetField_Present(...)
+// Fail early if some fields are null?
 // Take a pass at all the code...
 // Reflection
 // RPC code
@@ -355,7 +353,7 @@ class GoSourceFileGenerator {
       this.push("}\n");
       this.push(`v, ok := (*m)[${exposedKeyToComparableExpr}]\n`);
       this.push("if !ok {\n");
-      this.push(`return skir_client.Absent[${itemType}]()\n`);
+      this.push(`return skir_client.Optional[${itemType}]{}\n`);
       this.push("}\n");
       this.push(`return skir_client.OptionalOf(v)\n`);
       this.push("}\n\n");
@@ -468,7 +466,8 @@ class GoSourceFileGenerator {
     this.push(
       `func (b *${className}_partialBuilderType) Build() ${className} {\n`,
     );
-    this.push("  return &b.s\n");
+    this.push("  copy := b.s\n");
+    this.push("  return &copy\n");
     this.push("}\n\n");
 
     // Default _impl value.
