@@ -1,7 +1,8 @@
 // _arrayWrapper_FromSlice
 //   Or actually: arrayWrapper(slice); arrayWrapper_NoCopy(slice)
 //   and for optional fields: SetField_Absent(), SetField_Present(...)
-// Fail early if some fields are null?
+// WrapFoo should do nil check...
+// Check that enuns have String()
 // Take a pass at all the code...
 // Reflection
 // RPC code
@@ -524,9 +525,11 @@ class GoSourceFileGenerator {
     this.push("func init() {\n");
     // Register fields with the adapter.
     for (const field of struct.record.fields) {
-      const fieldName = "_" + convertCase(field.name.text, "lowerCamel");
-      const getterName = structFieldToGetterName(field);
       const type = field.type!;
+      const getterName = structFieldToGetterName(field);
+      const setterName = "Set"
+        .concat(convertCase(field.name.text, "UpperCamel"))
+        .concat(type.kind === "array" ? "_NoCopy" : "");
       const serializerExpr = typeSpeller.getSerializerExpression(type);
       const goType = typeSpeller.getGoType(type);
       const builderType = className.concat("_partialBuilderType");
@@ -538,7 +541,7 @@ class GoSourceFileGenerator {
           `${serializerExpr},\n` +
           `${toGoStringLiteral(docToCommentText(field.doc))},\n` +
           `func(s ${className}) ${goType} { return s.${getterName}() },\n` +
-          `func(b *${builderType}, v ${goType}) { b.s.${fieldName} = v },\n` +
+          `func(b *${builderType}, v ${goType}) { b.${setterName}(v) },\n` +
           ")\n",
       );
     }
