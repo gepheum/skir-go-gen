@@ -1,5 +1,3 @@
-// Put the Items_Search() method right after Items()...
-// Take a pass at all the code...
 // set up CI
 // githubisation: one package?
 
@@ -168,16 +166,14 @@ class GoSourceFileGenerator {
     for (const field of fields) {
       const getterName = structFieldToGetterName(field);
       this.push(`${getterName}() ${getInterfaceReturnType(field)}\n`);
-    }
-    // Search methods for keyed array fields belong in the interface too.
-    for (const field of fields) {
       const keyedArrayHelper = this.getKeyedArrayHelper(field!);
-      if (!keyedArrayHelper) continue;
-      const { searchMethodName } = keyedArrayHelper;
-      const { exposedKeyType, itemType } = keyedArrayHelper;
-      this.push(
-        `${searchMethodName}(k ${exposedKeyType}) skir_client.Optional[${itemType}]\n`,
-      );
+      if (keyedArrayHelper) {
+        const { searchMethodName } = keyedArrayHelper;
+        const { exposedKeyType, itemType } = keyedArrayHelper;
+        this.push(
+          `${searchMethodName}(k ${exposedKeyType}) skir_client.Optional[${itemType}]\n`,
+        );
+      }
     }
     this.push(`ToBuilder() *${className}_partialBuilderType\n`);
     this.push(`String() string\n`);
