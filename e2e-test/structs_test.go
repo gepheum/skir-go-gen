@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	skir_client "e2e-test/skir_client"
 	enums "e2e-test/skirout/enums"
 	structs "e2e-test/skirout/structs"
+
+	skir_client "github.com/gepheum/skir-go-client"
 )
 
 // =============================================================================

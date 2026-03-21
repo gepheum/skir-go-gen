@@ -4,8 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"e2e-test/skir_client"
 	enums "e2e-test/skirout/enums"
+
+	skir_client "github.com/gepheum/skir-go-client"
 )
 
 // =============================================================================

@@ -4,8 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"e2e-test/skir_client"
 	full_name "e2e-test/skirout/full_name"
+
+	skir_client "github.com/gepheum/skir-go-client"
 )
 
 // Default value tests

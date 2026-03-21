@@ -6,8 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"e2e-test/skir_client"
 	goldens "e2e-test/skirout/external/gepheum/skir_golden_tests/goldens"
+
+	skir_client "github.com/gepheum/skir-go-client"
 )
 
 // typedValueResult holds closures for encoding and re-decoding a typed value.

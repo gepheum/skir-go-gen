@@ -1,5 +1,4 @@
-// set up CI
-// githubisation: one package?
+// TODO: set up CI
 
 import {
   type CodeGenerator,
@@ -119,9 +118,8 @@ class GoSourceFileGenerator {
   }
 
   private writeImports(): void {
-    // TODO: rm e2e-test
     this.push(`import (
-      "e2e-test/skir_client"
+      "github.com/gepheum/skir-go-client"
       "sync/atomic"
       "time"
     `);
