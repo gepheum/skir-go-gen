@@ -1,5 +1,3 @@
-// TODO: set up CI
-
 import {
   type CodeGenerator,
   type Constant,
