@@ -1,6 +1,6 @@
 {
   "name": "skir-go-gen",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "",
   "keywords": [],
   "repository": {
@@ -54,6 +54,6 @@
   "overrides": {
     "diff": "^8.0.3",
     "minimatch": "^10.2.2",
-    "serialize-javascript": "^7.0.3"
+    "serialize-javascript": "^7.0.4"
   }
 }

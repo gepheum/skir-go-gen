@@ -1,4 +1,6 @@
 github.com/gepheum/skir-go-client v0.1.0 h1:mmQ53iYKwJHCKrScXgKiZ5vOcN64x2rsKDgDLinxevU=
 github.com/gepheum/skir-go-client v0.1.0/go.mod h1:mMpMzioHhRupGI9YApKPcBVjXcBvcHcszvfBNHECXTM=
+github.com/gepheum/skir-go-client v0.1.1 h1:zPI7Ni729dkuzLWTX0+SiF9ddjk60wHIrpzeL+seAco=
+github.com/gepheum/skir-go-client v0.1.1/go.mod h1:mMpMzioHhRupGI9YApKPcBVjXcBvcHcszvfBNHECXTM=
 github.com/valyala/fastjson v1.6.10 h1:/yjJg8jaVQdYR3arGxPE2X5z89xrlhS0eGXdv+ADTh4=
 github.com/valyala/fastjson v1.6.10/go.mod h1:e6FubmQouUNP73jtMLmcbxS6ydWIpOfhz34TSfO3JaE=
