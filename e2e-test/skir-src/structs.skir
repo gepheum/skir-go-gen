@@ -154,3 +154,7 @@ struct True {
   by: bool;
   it: [Floats|x];
 }
+
+struct StructWithOptionalSelfType {
+  a: StructWithOptionalSelfType?;
+}
