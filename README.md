@@ -331,13 +331,13 @@ notFound := userRegistry.Users_SearchByUserId(999)
 fmt.Println(notFound.IsPresent()) // false
 ```
 
-### Skir services
+### SkirRPC services
 
-#### Starting a Skir service on an HTTP server
+#### Starting a SkirRPC service on an HTTP server
 
 Full example [here](https://github.com/gepheum/skir-go-example/blob/main/cmd/start-service/main.go).
 
-#### Sending RPCs to a Skir service
+#### Sending RPCs to a SkirRPC service
 
 Full example [here](https://github.com/gepheum/skir-go-example/blob/main/cmd/call-service/main.go).
 
