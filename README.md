@@ -365,3 +365,4 @@ if sd2, ok := td2.(*skir.StructDescriptor); ok {
     fmt.Println(len(sd2.Fields())) // 5
 }
 ```
+
