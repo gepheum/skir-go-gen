@@ -134,6 +134,10 @@ func evaluateTypedValue(tv goldens.TypedValue) (typedValueResult, error) {
 		return newTypedValueResult(tv.UnwrapColor(), goldens.Color_serializer()), nil
 	case goldens.TypedValue_kind_myEnumWrapper:
 		return newTypedValueResult(tv.UnwrapMyEnum(), goldens.MyEnum_serializer()), nil
+	case goldens.TypedValue_kind_enumAWrapper:
+		return newTypedValueResult(tv.UnwrapEnumA(), goldens.EnumA_serializer()), nil
+	case goldens.TypedValue_kind_enumBWrapper:
+		return newTypedValueResult(tv.UnwrapEnumB(), goldens.EnumB_serializer()), nil
 	case goldens.TypedValue_kind_keyedArraysWrapper:
 		return newTypedValueResult(tv.UnwrapKeyedArrays(), goldens.KeyedArrays_serializer()), nil
 	case goldens.TypedValue_kind_recStructWrapper:
@@ -215,6 +219,56 @@ func evaluateTypedValue(tv goldens.TypedValue) (typedValueResult, error) {
 			return typedValueResult{}, err
 		}
 		return newTypedValueResult(v, goldens.MyEnum_serializer()), nil
+
+	case goldens.TypedValue_kind_enumAFromJsonDropUnrecognizedWrapper:
+		v, err := parseFromJson(goldens.EnumA_serializer(), tv.UnwrapEnumAFromJsonDropUnrecognized(), false)
+		if err != nil {
+			return typedValueResult{}, err
+		}
+		return newTypedValueResult(v, goldens.EnumA_serializer()), nil
+	case goldens.TypedValue_kind_enumAFromJsonKeepUnrecognizedWrapper:
+		v, err := parseFromJson(goldens.EnumA_serializer(), tv.UnwrapEnumAFromJsonKeepUnrecognized(), true)
+		if err != nil {
+			return typedValueResult{}, err
+		}
+		return newTypedValueResult(v, goldens.EnumA_serializer()), nil
+	case goldens.TypedValue_kind_enumAFromBytesDropUnrecognizedWrapper:
+		v, err := parseFromBytes(goldens.EnumA_serializer(), tv.UnwrapEnumAFromBytesDropUnrecognized(), false)
+		if err != nil {
+			return typedValueResult{}, err
+		}
+		return newTypedValueResult(v, goldens.EnumA_serializer()), nil
+	case goldens.TypedValue_kind_enumAFromBytesKeepUnrecognizedWrapper:
+		v, err := parseFromBytes(goldens.EnumA_serializer(), tv.UnwrapEnumAFromBytesKeepUnrecognized(), true)
+		if err != nil {
+			return typedValueResult{}, err
+		}
+		return newTypedValueResult(v, goldens.EnumA_serializer()), nil
+
+	case goldens.TypedValue_kind_enumBFromJsonDropUnrecognizedWrapper:
+		v, err := parseFromJson(goldens.EnumB_serializer(), tv.UnwrapEnumBFromJsonDropUnrecognized(), false)
+		if err != nil {
+			return typedValueResult{}, err
+		}
+		return newTypedValueResult(v, goldens.EnumB_serializer()), nil
+	case goldens.TypedValue_kind_enumBFromJsonKeepUnrecognizedWrapper:
+		v, err := parseFromJson(goldens.EnumB_serializer(), tv.UnwrapEnumBFromJsonKeepUnrecognized(), true)
+		if err != nil {
+			return typedValueResult{}, err
+		}
+		return newTypedValueResult(v, goldens.EnumB_serializer()), nil
+	case goldens.TypedValue_kind_enumBFromBytesDropUnrecognizedWrapper:
+		v, err := parseFromBytes(goldens.EnumB_serializer(), tv.UnwrapEnumBFromBytesDropUnrecognized(), false)
+		if err != nil {
+			return typedValueResult{}, err
+		}
+		return newTypedValueResult(v, goldens.EnumB_serializer()), nil
+	case goldens.TypedValue_kind_enumBFromBytesKeepUnrecognizedWrapper:
+		v, err := parseFromBytes(goldens.EnumB_serializer(), tv.UnwrapEnumBFromBytesKeepUnrecognized(), true)
+		if err != nil {
+			return typedValueResult{}, err
+		}
+		return newTypedValueResult(v, goldens.EnumB_serializer()), nil
 
 	case goldens.TypedValue_kind_roundTripDenseJsonWrapper:
 		inner, err := evaluateTypedValue(tv.UnwrapRoundTripDenseJson())
@@ -479,6 +533,86 @@ func verifyAssertion(t *testing.T, assertion goldens.Assertion) {
 
 	case goldens.Assertion_kind_reserializeLargeArrayWrapper:
 		reserializeLargeArrayAndVerify(t, assertion.UnwrapReserializeLargeArray())
+
+	case goldens.Assertion_kind_enumAFromJsonIsConstantWrapper:
+		input := assertion.UnwrapEnumAFromJsonIsConstant()
+		j, err := evaluateStringExpression(input.Actual())
+		if err != nil {
+			t.Fatalf("EnumAFromJsonIsConstant.actual: %v", err)
+		}
+		var enumA goldens.EnumA
+		if input.KeepUnrecognized() {
+			enumA, err = goldens.EnumA_serializer().FromJson(j, skir_client.KeepUnrecognizedValues{})
+		} else {
+			enumA, err = goldens.EnumA_serializer().FromJson(j)
+		}
+		if err != nil {
+			t.Fatalf("EnumAFromJsonIsConstant.actual parse EnumA: %v", err)
+		}
+		if enumA.Kind() != goldens.EnumA_kind_aConst {
+			t.Errorf("expected EnumA constant A, got kind=%v", enumA.Kind())
+		}
+
+	case goldens.Assertion_kind_enumAFromBytesIsConstantWrapper:
+		input := assertion.UnwrapEnumAFromBytesIsConstant()
+		b, err := evaluateBytesExpression(input.Actual())
+		if err != nil {
+			t.Fatalf("EnumAFromBytesIsConstant.actual: %v", err)
+		}
+		var enumA goldens.EnumA
+		if input.KeepUnrecognized() {
+			enumA, err = goldens.EnumA_serializer().FromBytes(b.Slice(), skir_client.KeepUnrecognizedValues{})
+		} else {
+			enumA, err = goldens.EnumA_serializer().FromBytes(b.Slice())
+		}
+		if err != nil {
+			t.Fatalf("EnumAFromBytesIsConstant.actual parse EnumA: %v", err)
+		}
+		if enumA.Kind() != goldens.EnumA_kind_aConst {
+			t.Errorf("expected EnumA constant A, got kind=%v", enumA.Kind())
+		}
+
+	case goldens.Assertion_kind_enumBFromJsonIsWrapperBWrapper:
+		input := assertion.UnwrapEnumBFromJsonIsWrapperB()
+		j, err := evaluateStringExpression(input.Actual())
+		if err != nil {
+			t.Fatalf("EnumBFromJsonIsWrapperB.actual: %v", err)
+		}
+		var enumB goldens.EnumB
+		if input.KeepUnrecognized() {
+			enumB, err = goldens.EnumB_serializer().FromJson(j, skir_client.KeepUnrecognizedValues{})
+		} else {
+			enumB, err = goldens.EnumB_serializer().FromJson(j)
+		}
+		if err != nil {
+			t.Fatalf("EnumBFromJsonIsWrapperB.actual parse EnumB: %v", err)
+		}
+		if !enumB.IsBWrapper() {
+			t.Errorf("expected EnumB wrapper, got kind=%v", enumB.Kind())
+		} else if enumB.UnwrapB() != input.Expected() {
+			t.Errorf("expected EnumB.b=%q, got %q", input.Expected(), enumB.UnwrapB())
+		}
+
+	case goldens.Assertion_kind_enumBFromBytesIsWrapperBWrapper:
+		input := assertion.UnwrapEnumBFromBytesIsWrapperB()
+		b, err := evaluateBytesExpression(input.Actual())
+		if err != nil {
+			t.Fatalf("EnumBFromBytesIsWrapperB.actual: %v", err)
+		}
+		var enumB goldens.EnumB
+		if input.KeepUnrecognized() {
+			enumB, err = goldens.EnumB_serializer().FromBytes(b.Slice(), skir_client.KeepUnrecognizedValues{})
+		} else {
+			enumB, err = goldens.EnumB_serializer().FromBytes(b.Slice())
+		}
+		if err != nil {
+			t.Fatalf("EnumBFromBytesIsWrapperB.actual parse EnumB: %v", err)
+		}
+		if !enumB.IsBWrapper() {
+			t.Errorf("expected EnumB wrapper, got kind=%v", enumB.Kind())
+		} else if enumB.UnwrapB() != input.Expected() {
+			t.Errorf("expected EnumB.b=%q, got %q", input.Expected(), enumB.UnwrapB())
+		}
 
 	default:
 		t.Errorf("unsupported assertion kind: %v", assertion.Kind())
