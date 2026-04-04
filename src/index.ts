@@ -929,22 +929,12 @@ class GoSourceFileGenerator {
     for (const variant of constantVariants) {
       const lowerName = convertCase(variant.name.text, "lowerCamel");
       this.push(
-        `_${className}_adapter.AddConstantVariant2(\n` +
+        `_${className}_adapter.AddConstantVariant(\n` +
           `${variant.number},\n` +
           `${toGoStringLiteral(variant.name.text)},\n` +
           `int(${kindType}_${lowerName}Const),\n` +
           `${toGoStringLiteral(docToCommentText(variant.doc))},\n` +
           `${className}_${lowerName}Const(),\n` +
-          `func(u *skir_client.Internal__UnrecognizedVariant) ${className} {\n` +
-          `if u == nil { return ${className}_${lowerName}Const() }\n` +
-          `return ${className}{kind: ${kindType}_${lowerName}Const, value: &_${className}_value_unknown{v: *u}}\n` +
-          `},\n` +
-          `func(e ${className}) *skir_client.Internal__UnrecognizedVariant {\n` +
-          `if e.kind != ${kindType}_${lowerName}Const || e.value == nil {\n` +
-          `return nil\n` +
-          `}\n` +
-          `return e.value.getUnrecognized()\n` +
-          `},\n` +
           ")\n",
       );
     }
@@ -955,7 +945,7 @@ class GoSourceFileGenerator {
       const goType = typeSpeller.getGoType(variant.type!);
       const serializerExpr = typeSpeller.getSerializerExpression(variant.type!);
       this.push(
-        `skir_client.Internal__AddWrapperVariant2(\n` +
+        `skir_client.Internal__AddWrapperVariant(\n` +
           `_${className}_adapter,\n` +
           `${variant.number},\n` +
           `${toGoStringLiteral(variant.name.text)},\n` +
@@ -964,7 +954,6 @@ class GoSourceFileGenerator {
           `${toGoStringLiteral(docToCommentText(variant.doc))},\n` +
           `func(v ${goType}) ${className} { return ${className}_${lowerName}Wrapper(v) },\n` +
           `func(e ${className}) ${goType} { return e.Unwrap${upperName}() },\n` +
-          `func() ${goType} { return ${this.getDefaultExpression(variant.type!)} },\n` +
           ")\n",
       );
     }
@@ -1104,51 +1093,6 @@ class GoSourceFileGenerator {
         };
       }
     }
-  }
-
-  private getDefaultExpression(type: ResolvedType): string {
-    switch (type.kind) {
-      case "primitive": {
-        switch (type.primitive) {
-          case "bool":
-            return "false";
-          case "int32":
-            return "int32(0)";
-          case "int64":
-            return "int64(0)";
-          case "hash64":
-            return "uint64(0)";
-          case "float32":
-            return "float32(0)";
-          case "float64":
-            return "float64(0)";
-          case "timestamp":
-            return "time.Time{}";
-          case "string":
-            return '""';
-          case "bytes":
-            return "skir_client.Bytes{}";
-        }
-        break;
-      }
-      case "array": {
-        const itemType = this.typeSpeller.getGoType(type.item);
-        return `skir_client.ArrayFromSlice([]${itemType}{})`;
-      }
-      case "optional": {
-        const innerType = this.typeSpeller.getGoType(type.other);
-        return `skir_client.Optional[${innerType}]{}`;
-      }
-      case "record": {
-        const record = this.typeSpeller.recordMap.get(type.key)!;
-        const recordType = this.typeSpeller.getGoType(type);
-        if (record.record.recordType === "struct") {
-          return `${recordType}_default()`;
-        }
-        return `${recordType}_unknown()`;
-      }
-    }
-    throw new Error("Unhandled type in getDefaultExpression");
   }
 
   private isStructType(type: ResolvedType): boolean {
