@@ -67,11 +67,11 @@ func TestWeekday_Predicates_OnlyMatchSelf(t *testing.T) {
 }
 
 func TestWeekday_String(t *testing.T) {
-	if got := enums.Weekday_mondayConst().String(); got != `"MONDAY"` {
-		t.Errorf("String(): got %q, want %q", got, `"MONDAY"`)
+	if got := enums.Weekday_mondayConst().String(); got != `"monday"` {
+		t.Errorf("String(): got %q, want %q", got, `"monday"`)
 	}
-	if got := enums.Weekday_unknown().String(); got != `"UNKNOWN"` {
-		t.Errorf("String() for unknown: got %q, want %q", got, `"UNKNOWN"`)
+	if got := enums.Weekday_unknown().String(); got != `"unknown"` {
+		t.Errorf("String() for unknown: got %q, want %q", got, `"unknown"`)
 	}
 }
 
@@ -94,11 +94,11 @@ func TestWeekday_Serializer_ToJson_Dense(t *testing.T) {
 
 func TestWeekday_Serializer_ToJson_Readable(t *testing.T) {
 	s := enums.Weekday_serializer()
-	if got := s.ToJson(enums.Weekday_mondayConst(), skir_client.Readable{}); got != `"MONDAY"` {
-		t.Errorf("MONDAY readable: got %q, want %q", got, `"MONDAY"`)
+	if got := s.ToJson(enums.Weekday_mondayConst(), skir_client.Readable{}); got != `"monday"` {
+		t.Errorf("MONDAY readable: got %q, want %q", got, `"monday"`)
 	}
-	if got := s.ToJson(enums.Weekday_fridayConst(), skir_client.Readable{}); got != `"FRIDAY"` {
-		t.Errorf("FRIDAY readable: got %q, want %q", got, `"FRIDAY"`)
+	if got := s.ToJson(enums.Weekday_fridayConst(), skir_client.Readable{}); got != `"friday"` {
+		t.Errorf("FRIDAY readable: got %q, want %q", got, `"friday"`)
 	}
 }
 
@@ -115,12 +115,12 @@ func TestWeekday_Serializer_FromJson_Dense(t *testing.T) {
 
 func TestWeekday_Serializer_FromJson_Readable(t *testing.T) {
 	s := enums.Weekday_serializer()
-	w, err := s.FromJson(`"WEDNESDAY"`)
+	w, err := s.FromJson(`"wednesday"`)
 	if err != nil {
-		t.Fatalf("FromJson(WEDNESDAY) error: %v", err)
+		t.Fatalf("FromJson(wednesday) error: %v", err)
 	}
 	if !w.IsWednesdayConst() {
-		t.Errorf("FromJson(WEDNESDAY): got kind=%v, want wednesdayConst", w.Kind())
+		t.Errorf("FromJson(wednesday): got kind=%v, want wednesdayConst", w.Kind())
 	}
 }
 
@@ -170,12 +170,12 @@ func TestWeekday_Accept_DispatchesToCorrectMethod(t *testing.T) {
 
 	enums.Weekday_accept(enums.Weekday_mondayConst(), visitor)
 	if called != "monday" {
-		t.Errorf("accept MONDAY: called %q, want monday", called)
+		t.Errorf("accept monday: called %q, want monday", called)
 	}
 
 	enums.Weekday_accept(enums.Weekday_fridayConst(), visitor)
 	if called != "friday" {
-		t.Errorf("accept FRIDAY: called %q, want friday", called)
+		t.Errorf("accept friday: called %q, want friday", called)
 	}
 
 	enums.Weekday_accept(enums.Weekday_unknown(), visitor)
@@ -185,18 +185,18 @@ func TestWeekday_Accept_DispatchesToCorrectMethod(t *testing.T) {
 
 	enums.Weekday_accept(enums.Weekday_wednesdayConst(), visitor)
 	if called != "wednesday" {
-		t.Errorf("accept WEDNESDAY: called %q, want wednesday", called)
+		t.Errorf("accept wednesday: called %q, want wednesday", called)
 	}
 }
 
 func TestWeekday_Accept_ReturnsValue(t *testing.T) {
 	got := enums.Weekday_accept(enums.Weekday_tuesdayConst(), &weekdayNameVisitor{})
-	if got != "TUESDAY" {
-		t.Errorf("accept return: got %q, want TUESDAY", got)
+	if got != "tuesday" {
+		t.Errorf("accept return: got %q, want tuesday", got)
 	}
 	got = enums.Weekday_accept(enums.Weekday_unknown(), &weekdayNameVisitor{})
-	if got != "UNKNOWN" {
-		t.Errorf("accept unknown return: got %q, want UNKNOWN", got)
+	if got != "unknown" {
+		t.Errorf("accept unknown return: got %q, want unknown", got)
 	}
 }
 
@@ -224,14 +224,14 @@ func (v *weekdayTestVisitor) OnWednesdayConst() struct{} { v.onWednesday(); retu
 
 type weekdayNameVisitor struct{}
 
-func (v *weekdayNameVisitor) OnUnknown() string        { return "UNKNOWN" }
-func (v *weekdayNameVisitor) OnFridayConst() string    { return "FRIDAY" }
-func (v *weekdayNameVisitor) OnMondayConst() string    { return "MONDAY" }
-func (v *weekdayNameVisitor) OnSaturdayConst() string  { return "SATURDAY" }
-func (v *weekdayNameVisitor) OnSundayConst() string    { return "SUNDAY" }
-func (v *weekdayNameVisitor) OnThursdayConst() string  { return "THURSDAY" }
-func (v *weekdayNameVisitor) OnTuesdayConst() string   { return "TUESDAY" }
-func (v *weekdayNameVisitor) OnWednesdayConst() string { return "WEDNESDAY" }
+func (v *weekdayNameVisitor) OnUnknown() string        { return "unknown" }
+func (v *weekdayNameVisitor) OnFridayConst() string    { return "friday" }
+func (v *weekdayNameVisitor) OnMondayConst() string    { return "monday" }
+func (v *weekdayNameVisitor) OnSaturdayConst() string  { return "saturday" }
+func (v *weekdayNameVisitor) OnSundayConst() string    { return "sunday" }
+func (v *weekdayNameVisitor) OnThursdayConst() string  { return "thursday" }
+func (v *weekdayNameVisitor) OnTuesdayConst() string   { return "tuesday" }
+func (v *weekdayNameVisitor) OnWednesdayConst() string { return "wednesday" }
 
 // =============================================================================
 // JsonValue (enum with nullConst + 5 wrappers)
@@ -377,12 +377,12 @@ func TestJsonValue_Serializer_Readable(t *testing.T) {
 	s := enums.JsonValue_serializer()
 
 	// NULL constant
-	if got := s.ToJson(enums.JsonValue_nullConst(), skir_client.Readable{}); got != `"NULL"` {
-		t.Errorf("nullConst readable: got %q, want %q", got, `"NULL"`)
+	if got := s.ToJson(enums.JsonValue_nullConst(), skir_client.Readable{}); got != `"null"` {
+		t.Errorf("nullConst readable: got %q, want %q", got, `"null"`)
 	}
 	// unknown
-	if got := s.ToJson(enums.JsonValue_unknown(), skir_client.Readable{}); got != `"UNKNOWN"` {
-		t.Errorf("unknown readable: got %q, want %q", got, `"UNKNOWN"`)
+	if got := s.ToJson(enums.JsonValue_unknown(), skir_client.Readable{}); got != `"unknown"` {
+		t.Errorf("unknown readable: got %q, want %q", got, `"unknown"`)
 	}
 	// string wrapper
 	readable := s.ToJson(enums.JsonValue_stringWrapper("hello"), skir_client.Readable{})
@@ -499,7 +499,7 @@ func TestJsonValuePair_Default(t *testing.T) {
 }
 
 // =============================================================================
-// Status (OK constant + error wrapper with struct)
+// Status (ok constant + error wrapper with struct)
 // =============================================================================
 
 func TestStatus_Default_IsUnknown(t *testing.T) {
@@ -540,13 +540,13 @@ func TestStatus_ErrorWrapper(t *testing.T) {
 }
 
 func TestStatus_UnwrapError_PanicsOnWrongKind(t *testing.T) {
-	assertPanics(t, "UnwrapError on OK", func() { enums.Status_okConst().UnwrapError() })
+	assertPanics(t, "UnwrapError on ok", func() { enums.Status_okConst().UnwrapError() })
 	assertPanics(t, "UnwrapError on unknown", func() { enums.Status_unknown().UnwrapError() })
 }
 
 func TestStatus_String(t *testing.T) {
-	if got := enums.Status_okConst().String(); got != `"OK"` {
-		t.Errorf("String() for OK: got %q, want %q", got, `"OK"`)
+	if got := enums.Status_okConst().String(); got != `"ok"` {
+		t.Errorf("String() for ok: got %q, want %q", got, `"ok"`)
 	}
 	s := enums.Status_errorWrapper(
 		enums.Status_Error_builder().SetCode(1).SetMessage("err").Build(),
@@ -560,9 +560,9 @@ func TestStatus_String(t *testing.T) {
 func TestStatus_Serializer_Dense(t *testing.T) {
 	s := enums.Status_serializer()
 
-	// OK has binary field 1
+	// ok has binary field 1
 	if got := s.ToJson(enums.Status_okConst()); got != "1" {
-		t.Errorf("OK dense: got %q, want %q", got, "1")
+		t.Errorf("ok dense: got %q, want %q", got, "1")
 	}
 	// error wrapper has binary field 4; Status_Error is a struct encoded as positional array
 	errStatus := enums.Status_errorWrapper(
@@ -576,8 +576,8 @@ func TestStatus_Serializer_Dense(t *testing.T) {
 func TestStatus_Serializer_Readable(t *testing.T) {
 	s := enums.Status_serializer()
 
-	if got := s.ToJson(enums.Status_okConst(), skir_client.Readable{}); got != `"OK"` {
-		t.Errorf("OK readable: got %q, want %q", got, `"OK"`)
+	if got := s.ToJson(enums.Status_okConst(), skir_client.Readable{}); got != `"ok"` {
+		t.Errorf("ok readable: got %q, want %q", got, `"ok"`)
 	}
 	errStatus := enums.Status_errorWrapper(
 		enums.Status_Error_builder().SetCode(404).SetMessage("not found").Build(),
@@ -637,7 +637,7 @@ func TestStatus_Accept(t *testing.T) {
 		t.Errorf("accept unknown: got %q", got)
 	}
 	if got := enums.Status_accept(enums.Status_okConst(), v); got != "ok" {
-		t.Errorf("accept OK: got %q", got)
+		t.Errorf("accept ok: got %q", got)
 	}
 	errStatus := enums.Status_errorWrapper(
 		enums.Status_Error_builder().SetCode(0).SetMessage("").Build(),
@@ -658,12 +658,12 @@ func (v *statusNameVisitor) OnErrorWrapper(e enums.Status_Error) string { return
 // =============================================================================
 
 func TestStatusError_Builder(t *testing.T) {
-	e := enums.Status_Error_builder().SetCode(200).SetMessage("OK").Build()
+	e := enums.Status_Error_builder().SetCode(200).SetMessage("ok").Build()
 	if e.Code() != 200 {
 		t.Errorf("Code: got %d, want 200", e.Code())
 	}
-	if e.Message() != "OK" {
-		t.Errorf("Message: got %q, want OK", e.Message())
+	if e.Message() != "ok" {
+		t.Errorf("Message: got %q, want ok", e.Message())
 	}
 }
 
@@ -749,12 +749,12 @@ func TestEnumWithNameConflict_SerializerConst(t *testing.T) {
 	if e.IsUnknown() || e.IsIfWrapper() {
 		t.Error("only IsSerializerConst() should be true")
 	}
-	// SERIALIZER has binary field 1
+	// serializer has binary field 1
 	if got := enums.EnumWithNameConflict_serializer().ToJson(e); got != "1" {
 		t.Errorf("serializerConst dense: got %q, want %q", got, "1")
 	}
-	if got := enums.EnumWithNameConflict_serializer().ToJson(e, skir_client.Readable{}); got != `"SERIALIZER"` {
-		t.Errorf("serializerConst readable: got %q, want %q", got, `"SERIALIZER"`)
+	if got := enums.EnumWithNameConflict_serializer().ToJson(e, skir_client.Readable{}); got != `"serializer"` {
+		t.Errorf("serializerConst readable: got %q, want %q", got, `"serializer"`)
 	}
 }
 

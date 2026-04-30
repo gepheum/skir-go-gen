@@ -927,9 +927,7 @@ class GoSourceFileGenerator {
     // init() – register variants and finalize.
     this.push("func init() {\n");
     for (const variant of constantVariants) {
-      const stringLiteral = toGoStringLiteral(
-        convertCase(variant.name.text, "UPPER_UNDERSCORE"),
-      );
+      const stringLiteral = toGoStringLiteral(variant.name.text);
       const lowerName = convertCase(variant.name.text, "lowerCamel");
       this.push(
         `_${className}_adapter.AddConstantVariant(\n` +

@@ -1,6 +1,6 @@
 {
   "name": "skir-go-gen",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "",
   "keywords": [],
   "repository": {
@@ -26,7 +26,7 @@
     "format-skir:check": "cd e2e-test && skir format --ci && cd ..",
     "format": "prettier --write \"**/*.ts\" && npm run format-skir",
     "format:check": "prettier --check \"**/*.ts\" && npm run format-skir:check",
-    "test": "npm run build && cd e2e-test && skir gen && go test ./... && cd ..",
+    "test": "npm run build && cd e2e-test && go mod tidy && skir gen && go test ./... && cd ..",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix"
   },
@@ -45,7 +45,7 @@
     "mocha": "^11.7.5",
     "prettier": "^3.2.4",
     "prettier-plugin-organize-imports": "^4.2.0",
-    "skir": "^1.1.10",
+    "skir": "^1.2.11",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^5.2.2",
